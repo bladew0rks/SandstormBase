@@ -1,0 +1,9 @@
+"UnlitGeneric"
+{
+    "$basetexture" "sandswep/hud/weapons/icon/weapon_sand_ieddet"
+    "$translucent" "1"
+    "$vertexcolor" "1"
+    "$vertexalpha" "1"
+    "$nolod" "1"
+    "$ignorez" "1"
+}

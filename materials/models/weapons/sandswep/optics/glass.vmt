@@ -1,0 +1,12 @@
+// Magnified optic lens glass (scope eyepieces / objectives). Dark, slightly
+// see-through, with cubemap reflections and fresnel so it reads as glass.
+// While aiming through a scope the base draws the scope image over it.
+"VertexLitGeneric"
+{
+	"$basetexture" "models/weapons/sandswep/optics/glass"
+	"$translucent" "1"
+	"$envmap" "env_cubemap"
+	"$envmaptint" "[0.35 0.4 0.45]"
+	"$envmapfresnel" "1"
+	"$halflambert" "1"
+}

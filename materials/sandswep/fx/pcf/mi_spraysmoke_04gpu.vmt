@@ -1,0 +1,6 @@
+"SpriteCard"
+{
+    "$basetexture" "sandswep/fx/pcf/t_smokespike_04_bc"
+    "$blendframes" "0"
+    "$depthblend" "0"
+}

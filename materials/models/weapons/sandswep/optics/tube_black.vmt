@@ -1,0 +1,8 @@
+// Flat black lining for scope tubes (M110 scope "black" material): hides the inside of
+// the scope body behind the eyepiece. Models ignore $color, so the tint is $color2.
+"UnlitGeneric"
+{
+	"$basetexture"	"vgui/white"
+	"$color2"	"[0 0 0]"
+	"$nocull"	"1"
+}

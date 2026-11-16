@@ -1,0 +1,9 @@
+"UnlitGeneric"
+{
+	"$basetexture" "models/weapons/sandswep/reticles/m110mk4"
+	"$translucent" "1"
+	"$vertexcolor" "1"
+	"$vertexalpha" "1"
+	"$nocull" "1"
+	"$ignorez" "1"
+}

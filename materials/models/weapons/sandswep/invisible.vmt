@@ -1,0 +1,9 @@
+// Used by sandswep attachment models for lens glass and baked reticle planes.
+// The base draws reticles and lens effects itself, so these surfaces stay hidden.
+"UnlitGeneric"
+{
+	"$basetexture"	"vgui/white"
+	"$alpha"	"0"
+	"$translucent"	"1"
+	"$no_draw"	"1"
+}

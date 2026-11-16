@@ -1,0 +1,7 @@
+"SpriteCard"
+{
+    "$basetexture" "sandswep/fx/pcf/t_muzzleflash_04_bc"
+    "$additive" "1"
+    "$blendframes" "0"
+    "$depthblend" "0"
+}

@@ -3,42 +3,41 @@ SandSwep = SandSwep or {}
 local EVENT_SOUND = 5004
 local EVENT_MARK = 6000
 
-local function u8(data, offset) return string.byte(data, offset + 1) or 0 end
+local sbyte, sfind, ssub = string.byte, string.find, string.sub
+local bor, band, lshift, rshift, arshift = bit.bor, bit.band, bit.lshift, bit.rshift, bit.arshift
+local ldexp, huge = math.ldexp, math.huge
+
 local function i32(data, offset)
-    local b0, b1, b2, b3 = string.byte(data, offset + 1, offset + 4)
+    local b0, b1, b2, b3 = sbyte(data, offset + 1, offset + 4)
     if not b3 then return 0 end
-
-    local value = b0 + b1 * 256 + b2 * 65536 + b3 * 16777216
-    if value >= 2147483648 then value = value - 4294967296 end
-    return value
+    return bor(b0, lshift(b1, 8), lshift(b2, 16), lshift(b3, 24))
 end
+
 local function i16(data, offset)
-    local b0, b1 = string.byte(data, offset + 1, offset + 2)
+    local b0, b1 = sbyte(data, offset + 1, offset + 2)
     if not b1 then return 0 end
-
-    local value = b0 + b1 * 256
-    if value >= 32768 then value = value - 65536 end
-    return value
+    return arshift(lshift(bor(b0, lshift(b1, 8)), 16), 16)
 end
+
 local function f32(data, offset)
-    local b0, b1, b2, b3 = string.byte(data, offset + 1, offset + 4)
-    if not b3 then return 0 end
-
-    local sign = b3 >= 128 and -1 or 1
-    local exponent = (b3 % 128) * 2 + math.floor(b2 / 128)
-    local mantissa = (b2 % 128) * 65536 + b1 * 256 + b0
-
-    if exponent == 0 then
-        if mantissa == 0 then return 0 end
-        return sign * mantissa * 2 ^ -149
+    local bits = i32(data, offset)
+    local e = band(rshift(bits, 23), 0xFF)
+    local m = band(bits, 0x7FFFFF)
+    local v
+    if e == 0 then
+        if m == 0 then return 0 end
+        v = ldexp(m, -149)
+    elseif e == 255 then
+        v = huge
+    else
+        v = ldexp(m + 0x800000, e - 150)
     end
-    if exponent == 255 then return sign * math.huge end
-
-    return sign * (1 + mantissa / 8388608) * 2 ^ (exponent - 127)
+    return bits < 0 and -v or v
 end
+
 local function cstr(data, offset)
-    local stop = string.find(data, "\0", offset + 1, true)
-    return string.sub(data, offset + 1, (stop or #data + 1) - 1)
+    local stop = sfind(data, "\0", offset + 1, true)
+    return ssub(data, offset + 1, (stop or #data + 1) - 1)
 end
 
 local cache = {}

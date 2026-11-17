@@ -157,10 +157,15 @@ function SWEP:GetMagSize()
 end
 
 function SWEP:UpdateMagSize()
+    local cache = self:AttCache()
     local size = self:GetMagSize()
-    local key = tostring(size)
-    for _, id, def in self:IterAttachments() do
-        if def.Slot == "magazine" then key = key .. "|" .. tostring(id) end
+    local key = cache.magKey
+    if not key then
+        key = tostring(size)
+        for _, id, def in self:IterAttachments() do
+            if def.Slot == "magazine" then key = key .. "|" .. tostring(id) end
+        end
+        cache.magKey = key
     end
 
     local last = self._lastMagKey

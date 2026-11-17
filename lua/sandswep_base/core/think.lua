@@ -134,7 +134,7 @@ function SWEP:UpdateIdleFidget(owner, ct)
     local fidgeting = self:IsFidgeting()
 
     if active then
-        self:SetIdleSince(ct)
+        if self:GetIdleSince() ~= 0 then self:SetIdleSince(0) end
         if fidgeting then
             self:StopAction()
             if self.LastAnim == "fidget" then self:PlayIdleAnim() end
@@ -142,7 +142,13 @@ function SWEP:UpdateIdleFidget(owner, ct)
         return
     end
 
-    if fidgeting or ct - self:GetIdleSince() < self.IdleFidgetTime then return end
+    local idleSince = self:GetIdleSince()
+    if idleSince <= 0 then
+        self:SetIdleSince(ct)
+        return
+    end
+
+    if fidgeting or ct - idleSince < self.IdleFidgetTime then return end
 
     if self:IsBoltLocked() or not self:HasAnim("fidget") then
         self:SetIdleSince(ct)

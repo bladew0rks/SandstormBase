@@ -726,6 +726,8 @@ function SWEP:GetSprintCamera()
     return out
 end
 
+local camRot, camRotT, parentT, camDelta = Matrix(), Matrix(), Matrix(), Matrix()
+
 local function MeasureCameraBone(vm)
     local cam = SandSwep.BoneId(vm, "b_camera")
     if not cam then return end
@@ -739,18 +741,27 @@ local function MeasureCameraBone(vm)
     camMat:SetTranslation(vector_origin)
     parentMat:SetTranslation(vector_origin)
 
-    local vmRot = Matrix()
-    vmRot:SetAngles(vm:GetAngles())
-    local delta = vmRot:GetTransposed() * camMat * parentMat:GetTransposed() * vmRot
+    camRot:Identity()
+    camRot:SetAngles(vm:GetAngles())
+    camRotT:Set(camRot)
+    camRotT:InvertTR()
+    parentT:Set(parentMat)
+    parentT:InvertTR()
 
-    local cosine = math.Clamp((delta:GetField(1, 1) + delta:GetField(2, 2) + delta:GetField(3, 3) - 1) * 0.5, -1, 1)
+    camDelta:Set(camRotT)
+    camDelta:Mul(camMat)
+    camDelta:Mul(parentT)
+    camDelta:Mul(camRot)
+
+    local d11, d12, d13, _, d21, d22, d23, _, d31, d32, d33 = camDelta:Unpack()
+    local cosine = math.Clamp((d11 + d22 + d33 - 1) * 0.5, -1, 1)
     local theta = math.acos(cosine)
     if theta < 1e-6 then return 0, 0, 0 end
 
     local scale = math.deg(theta) / (2 * math.sin(theta))
-    local aboutForward = (delta:GetField(3, 2) - delta:GetField(2, 3)) * scale
-    local aboutLeft = (delta:GetField(1, 3) - delta:GetField(3, 1)) * scale
-    local aboutUp = (delta:GetField(2, 1) - delta:GetField(1, 2)) * scale
+    local aboutForward = (d32 - d23) * scale
+    local aboutLeft = (d13 - d31) * scale
+    local aboutUp = (d21 - d12) * scale
 
     return -aboutLeft, aboutForward, aboutUp
 end
@@ -768,7 +779,7 @@ hook.Add("PostDrawViewModel", "SandSwep_CameraBone", function(vm, ply, wep)
     wep._camBone = wep._camBone or {}
     local bone = wep._camBone
     bone[1], bone[2], bone[3], bone.frame = right, fwd, up, FrameNumber()
-    bone.seq = string.lower(vm:GetSequenceName(vm:GetSequence()) or "")
+    bone.seq = Developer() and string.lower(vm:GetSequenceName(vm:GetSequence()) or "") or nil
 end)
 
 function SWEP:UpdateCameraAnim()

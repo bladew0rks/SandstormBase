@@ -227,15 +227,19 @@ function SWEP:ProcessSoundSet()
     local scale = self:GetSoundSetScale()
     local elapsed = CurTime() - self:GetSoundSetStart()
     local last = self:GetSoundSetLast()
+    local newLast = last
     local lastEvent = 0
 
     for _, event in ipairs(events) do
         local eventTime = (event.t or 0) * scale
-        if eventTime > last and eventTime <= elapsed then self:PlayEventSound(event) end
+        if eventTime > last and eventTime <= elapsed then
+            self:PlayEventSound(event)
+            if eventTime > newLast then newLast = eventTime end
+        end
         if eventTime > lastEvent then lastEvent = eventTime end
     end
 
-    self:SetSoundSetLast(elapsed)
+    if newLast ~= last then self:SetSoundSetLast(newLast) end
     if elapsed >= lastEvent then self:SetSoundSet(0) end
 end
 

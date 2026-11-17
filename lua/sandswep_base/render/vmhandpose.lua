@@ -26,17 +26,29 @@ local function Rod(vec, axis, cos, sin)
     return vec * cos + axis:Cross(vec) * sin + axis * (axis:Dot(vec) * (1 - cos))
 end
 
+local function RodXYZ(vx, vy, vz, ax, ay, az, cos, sin)
+    local dot = (ax * vx + ay * vy + az * vz) * (1 - cos)
+    return vx * cos + (ay * vz - az * vy) * sin + ax * dot,
+        vy * cos + (az * vx - ax * vz) * sin + ay * dot,
+        vz * cos + (ax * vy - ay * vx) * sin + az * dot
+end
+
 local function Turn(mat, axis, cos, sin, pivot)
-    local rows = mat:ToTable()
-    for col = 1, 3 do
-        local vec = Rod(Vector(rows[1][col], rows[2][col], rows[3][col]), axis, cos, sin)
-        rows[1][col], rows[2][col], rows[3][col] = vec.x, vec.y, vec.z
-    end
+    local m11, m12, m13, m14, m21, m22, m23, m24, m31, m32, m33, m34 = mat:Unpack()
+    local ax, ay, az = axis.x, axis.y, axis.z
+    local px, py, pz = pivot.x, pivot.y, pivot.z
 
-    local origin = Rod(Vector(rows[1][4], rows[2][4], rows[3][4]) - pivot, axis, cos, sin) + pivot
-    rows[1][4], rows[2][4], rows[3][4] = origin.x, origin.y, origin.z
+    m11, m21, m31 = RodXYZ(m11, m21, m31, ax, ay, az, cos, sin)
+    m12, m22, m32 = RodXYZ(m12, m22, m32, ax, ay, az, cos, sin)
+    m13, m23, m33 = RodXYZ(m13, m23, m33, ax, ay, az, cos, sin)
+    m14, m24, m34 = RodXYZ(m14 - px, m24 - py, m34 - pz, ax, ay, az, cos, sin)
 
-    return Matrix(rows)
+    mat:SetUnpacked(
+        m11, m12, m13, m14 + px,
+        m21, m22, m23, m24 + py,
+        m31, m32, m33, m34 + pz,
+        0, 0, 0, 1)
+    return mat
 end
 
 local function Between(from, to)
@@ -91,11 +103,11 @@ function SWEP:GetHandPoseSource()
     return self, "weapon:" .. self:GetClass()
 end
 
-function SWEP:GetHandPose()
+function SWEP:GetHandPose(out)
     local src, key = self:GetHandPoseSource()
     local edit = SandSwep.HandEdit[key]
 
-    local out = {}
+    out = out or {}
     for _, field in ipairs(FIELDS) do
         local value = edit and edit[field]
         if value == nil then value = src[field] end
@@ -110,8 +122,19 @@ local function Active(pose)
         or (pose.LeftElbow or 0) ~= 0 or (pose.LeftForearmRoll or 0) ~= 0 or (pose.LeftWristTwist or 0) ~= 0
 end
 
+local function ActiveSource(src, edit)
+    if edit then return true end
+    return Active(src)
+end
+
+local handScratch = {}
+
 function SWEP:VMHandPose(vm)
-    local pose, key = self:GetHandPose()
+    local src, key = self:GetHandPoseSource()
+    local edit = SandSwep.HandEdit[key]
+    if not ActiveSource(src, edit) then return end
+
+    local pose = edit and self:GetHandPose(handScratch) or src
     if not Active(pose) then return end
 
     local bones = BoneSet(vm)
@@ -141,11 +164,12 @@ function SWEP:VMHandPose(vm)
     if weight <= 0 then return end
 
     local delta = wpnM:GetUp() * (-(pose.LeftHandDrop or 0) * weight)
-    local handMats = {}
+    local handMats = bones.handMats or {}
+    bones.handMats = handMats
     for _, bone in ipairs(bones.handTree) do handMats[bone] = vm:GetBoneMatrix(bone) end
 
-    local wpnRows = wpnM:ToTable()
-    local barrel = -Vector(wpnRows[1][2], wpnRows[2][2], wpnRows[3][2])
+    local _, w12, _, _, _, w22, _, _, _, w32 = wpnM:Unpack()
+    local barrel = Vector(-w12, -w22, -w32)
     if (pose.LeftHandRoll or 0) ~= 0 and barrel:LengthSqr() > 1e-6 then
         barrel:Normalize()
 
@@ -153,8 +177,9 @@ function SWEP:VMHandPose(vm)
         local rollCos, rollSin = math.cos(rad), math.sin(rad)
         local pivot = fgM:GetTranslation() + wpnM:GetUp() * (pose.LeftHandPivotUp or 0)
 
-        for bone, mat in pairs(handMats) do
-            if mat then handMats[bone] = Turn(mat, barrel, rollCos, rollSin, pivot) end
+        for _, bone in ipairs(bones.handTree) do
+            local mat = handMats[bone]
+            if mat then Turn(mat, barrel, rollCos, rollSin, pivot) end
         end
         wrist = Rod(wrist - pivot, barrel, rollCos, rollSin) + pivot
     end
@@ -166,17 +191,17 @@ function SWEP:VMHandPose(vm)
         local posOff = LocalToWorld((pose.LeftHandPos or vector_origin) * weight, angle_zero, vector_origin, wpnAng)
         local newWrist = wrist + posOff
 
-        for bone, mat in pairs(handMats) do
+        for _, bone in ipairs(bones.handTree) do
+            local mat = handMats[bone]
             if mat then
                 local scale = mat:GetScale()
                 local localPos, localAng = WorldToLocal(mat:GetTranslation(), mat:GetAngles(), wrist, wpnAng)
                 local newPos, newAng = LocalToWorld(localPos, localAng, newWrist, handAng)
 
-                local moved = Matrix()
-                moved:SetTranslation(newPos)
-                moved:SetAngles(newAng)
-                moved:Scale(scale)
-                handMats[bone] = moved
+                mat:Identity()
+                mat:SetTranslation(newPos)
+                mat:SetAngles(newAng)
+                mat:Scale(scale)
             end
         end
         wrist = newWrist
@@ -240,7 +265,8 @@ function SWEP:VMHandPose(vm)
         end
     end
 
-    for bone, mat in pairs(handMats) do
+    for _, bone in ipairs(bones.handTree) do
+        local mat = handMats[bone]
         if mat then
             mat:SetTranslation(mat:GetTranslation() + delta)
             vm:SetBoneMatrix(bone, mat)

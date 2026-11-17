@@ -131,12 +131,10 @@ local function AvoidCapsules(cfg, vm, radius)
     return capsules
 end
 
-local function SolveAttached(sim, cfg, frame, vm, pin, dir, pitch)
+local function SolveAttached(sim, cfg, frame, toLocal, capsules, pin, dir, pitch)
     local nodes = sim.nodes
-    local toLocal = frame.m:GetInverseTR()
     local radius = (cfg.Radius or 0.8) * CM
     local boxes = cfg.Avoid or {}
-    local capsules = AvoidCapsules(cfg, vm, radius)
     local bend = (cfg.Stiffness or 1.6) * pitch
 
     for _ = 1, 6 do
@@ -413,9 +411,14 @@ local function Integrate(sim, cfg, frame, vm, pin, dir, pitch)
     local damping = cfg.Damping or 0.97
     local gravity = ATTACHED_GRAVITY * (ATTACHED_STEP * ATTACHED_STEP)
     local maxStep = (cfg.MaxSpeed or 60) * ATTACHED_STEP
+    local toLocal, capsules
 
     local steps = 0
     while sim.acc >= ATTACHED_STEP and steps < 8 do
+        if not toLocal then
+            toLocal = frame.m:GetInverseTR()
+            capsules = AvoidCapsules(cfg, vm, (cfg.Radius or 0.8) * CM)
+        end
         sim.acc = sim.acc - ATTACHED_STEP
         steps = steps + 1
 
@@ -429,7 +432,7 @@ local function Integrate(sim, cfg, frame, vm, pin, dir, pitch)
             node.p = node.p + vel + gravity
         end
 
-        SolveAttached(sim, cfg, frame, vm, pin, dir, pitch)
+        SolveAttached(sim, cfg, frame, toLocal, capsules, pin, dir, pitch)
     end
 
     if steps == 0 then nodes[1].p = pin end

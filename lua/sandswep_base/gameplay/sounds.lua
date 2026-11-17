@@ -232,7 +232,7 @@ function SWEP:ProcessSoundSet()
 
     for _, event in ipairs(events) do
         local eventTime = (event.t or 0) * scale
-        if eventTime > last and eventTime <= elapsed then
+        if eventTime > last + 1e-4 and eventTime <= elapsed then
             self:PlayEventSound(event)
             if eventTime > newLast then newLast = eventTime end
         end

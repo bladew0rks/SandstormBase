@@ -85,6 +85,33 @@ local function AmmoHit(wep, ammo, attacker, tr, dmg)
     end
 end
 
+function SWEP:GetCalibre()
+    local ballistics = SandSwep.Ballistics
+    if not ballistics then return nil end
+
+    local ammo = self:GetAmmoDef()
+    local name = ammo and ammo.Calibre or self.Calibre or ballistics.AmmoCalibres[self.Primary.Ammo] or "556x45"
+
+    return ballistics.Calibres[name] or ballistics.Calibres["556x45"]
+end
+
+function SWEP:GetMuzzleVelocity()
+    local def = self:GetCalibre()
+    local ammo = self:GetAmmoDef()
+    local speed = self.MuzzleVelocity or def.Velocity
+
+    return speed * (ammo and ammo.VelocityMult or 1) * self:GetStatMult("Velocity")
+end
+
+function SWEP:UsesBallistics(numBullets)
+    local ballistics = SandSwep.Ballistics
+    if not ballistics or not ballistics.Enabled() then return false end
+    if numBullets ~= 1 or self.Hitscan then return false end
+
+    local ammo = self:GetAmmoDef()
+    return not (ammo and ammo.Hitscan)
+end
+
 function SWEP:TryBreach(src, dir, force)
     if not SERVER or not SandSwep.BreachDoor or not SandSwep.ShotgunBreachEnabled() then return end
     if not force and self:GetPelletCount() <= 1 and not self.CanBreach then return end
@@ -261,7 +288,13 @@ function SWEP:GetBarrelShot()
     local barrelDir = LocalToWorld(barrel.dir, angle_zero, vector_origin, aimAng)
     barrelDir:Normalize()
 
-    local zeroDir = shootPos + aimDir * ((self.BarrelZero or 100) * INCHES_PER_METER) - muzzle
+    local zeroDist = (self.BarrelZero or 100) * INCHES_PER_METER
+    local zeroDir = shootPos + aimDir * zeroDist - muzzle
+    if self:UsesBallistics(self:GetPelletCount()) then
+        local def = self:GetCalibre()
+        local speed = self:GetMuzzleVelocity() * INCHES_PER_METER
+        zeroDir.z = zeroDir.z + SandSwep.Ballistics.DropAt(def, SandSwep.Ballistics.TimeAtSpeed(def, speed), zeroDist)
+    end
     zeroDir:Normalize()
 
     local blend = math.Clamp(self:GetAimProgress(), 0, 1)
@@ -330,9 +363,44 @@ function SWEP:ShootBullet(damage, numBullets, aimcone, ammoType, force, tracer)
 
     hook.Run("SandSwep_PreFireBullets", self, bullet)
 
-    owner:FireBullets(bullet)
+    if self:UsesBallistics(bullet.Num) then
+        self:FireBallistic(owner, bullet, ammo)
+    else
+        owner:FireBullets(bullet)
+    end
     self:TryBreach(src, dir)
     self:ShootEffects()
+end
+
+local spreadRight, spreadUp = Vector(), Vector()
+
+function SWEP:FireBallistic(owner, bullet, ammo)
+    local dir = Vector(bullet.Dir)
+    local spread = bullet.Spread or vector_origin
+    local seed = self:GetShotCount()
+
+    if spread.x > 0 or spread.y > 0 then
+        local ang = dir:Angle()
+        spreadRight:Set(ang:Right())
+        spreadUp:Set(ang:Up())
+
+        local x = util.SharedRandom("SandSwepSpreadX1", -0.5, 0.5, seed) + util.SharedRandom("SandSwepSpreadX2", -0.5, 0.5, seed)
+        local y = util.SharedRandom("SandSwepSpreadY1", -0.5, 0.5, seed) + util.SharedRandom("SandSwepSpreadY2", -0.5, 0.5, seed)
+
+        dir:Add(spreadRight * (x * spread.x))
+        dir:Add(spreadUp * (y * spread.y))
+        dir:Normalize()
+    end
+
+    local every = bullet.Tracer or 5
+
+    SandSwep.Ballistics.Fire(owner, self, bullet.Src, dir, bullet, {
+        Def = self:GetCalibre(),
+        Speed = self:GetMuzzleVelocity() * INCHES_PER_METER,
+        PenMult = (ammo and ammo.PenMult or 1) * (self.PenetrationMult or 1),
+        Seed = seed,
+        Tracer = every > 0 and seed % every == 0,
+    })
 end
 
 function SWEP:ShootEffects()

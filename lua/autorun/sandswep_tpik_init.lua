@@ -1,13 +1,13 @@
 local SHARED = {
-    "sandswep_tpik/sh_tracker.lua",
-    "sandswep_tpik/sh_ik.lua",
+    "sandswep_base/tpik/sh_tracker.lua",
+    "sandswep_base/tpik/sh_ik.lua",
 }
 
 local CLIENTSIDE = {
-    "sandswep_tpik/cl_convars.lua",
-    "sandswep_tpik/cl_attachments.lua",
-    "sandswep_tpik/cl_solver.lua",
-    "sandswep_tpik/cl_menu.lua",
+    "sandswep_base/tpik/cl_convars.lua",
+    "sandswep_base/tpik/cl_attachments.lua",
+    "sandswep_base/tpik/cl_solver.lua",
+    "sandswep_base/tpik/cl_menu.lua",
 }
 
 if SERVER then

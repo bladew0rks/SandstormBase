@@ -329,6 +329,7 @@ function SWEP:EmitShotLayer(snd, level, pitch, volume, chan, key)
     if not snd then return end
 
     if IsRawSound(snd) then
+        if string.find(snd, "^[%w_]") then snd = ")" .. snd end
         if istable(pitch) then pitch = math.random(pitch[1], pitch[2]) end
         if key and key:sub(1, 5) == "Close" then self._lastShotKey, self._lastShotPitch = key, pitch end
         self:EmitSound(snd, level or 75, pitch or 100, volume or 1, chan or CHAN_STATIC)

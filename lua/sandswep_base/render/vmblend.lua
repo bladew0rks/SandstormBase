@@ -222,6 +222,8 @@ function SWEP:HookBoneBlend(vm)
         if IsValid(wep) and wep.VMTubeSelector then wep:VMTubeSelector(ent) end
         if IsValid(wep) and wep.VMBoneBlend then wep:VMBoneBlend(ent, numBones) end
         if IsValid(wep) and wep.VMMagRounds then wep:VMMagRounds(ent) end
+        if IsValid(wep) and wep.VMVManip then wep:VMVManip(ent) end
+        if IsValid(wep) and wep.VMForearmFit then wep:VMForearmFit(ent) end
     end)
 end
 

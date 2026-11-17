@@ -583,3 +583,151 @@ concommand.Add("sandswep_handeditor", function()
     Fill()
     RefreshMarks()
 end)
+
+local VMANIP_BONES = {
+    "ValveBiped.Bip01_L_UpperArm", "ValveBiped.Bip01_L_Forearm", "ValveBiped.Bip01_L_Hand",
+    "ValveBiped.Bip01_L_Wrist", "ValveBiped.Bip01_L_Ulna",
+    "ValveBiped.Bip01_L_Finger0", "ValveBiped.Bip01_L_Finger01", "ValveBiped.Bip01_L_Finger02",
+    "ValveBiped.Bip01_L_Finger1", "ValveBiped.Bip01_L_Finger11", "ValveBiped.Bip01_L_Finger12",
+    "ValveBiped.Bip01_L_Finger2", "ValveBiped.Bip01_L_Finger21", "ValveBiped.Bip01_L_Finger22",
+    "ValveBiped.Bip01_L_Finger3", "ValveBiped.Bip01_L_Finger31", "ValveBiped.Bip01_L_Finger32",
+    "ValveBiped.Bip01_L_Finger4", "ValveBiped.Bip01_L_Finger41", "ValveBiped.Bip01_L_Finger42",
+}
+
+local function HasGCAL()
+    return istable(GCAL) and isfunction(GCAL.RegisterWeaponBaseStrategy)
+end
+
+function SandSwep.VManipActive()
+    local vmanip = VManip
+    return istable(vmanip) and IsValid(vmanip.VMGesture) and vmanip.IsValid ~= nil and vmanip:IsValid() or false
+end
+
+local ARM_PARTS = { "Clavicle", "UpperArm", "Forearm", "Ulna", "Wrist", "Hand", "Finger" }
+
+local function ArmSide(name)
+    local side = string.match(name, "_([LR])_")
+    if not side then return end
+    for _, part in ipairs(ARM_PARTS) do
+        if string.find(name, part, 1, true) then return side end
+    end
+end
+
+local function TrackIsArm(track)
+    for _, name in ipairs(track.bones or VMANIP_BONES) do
+        if ArmSide(name) then return true end
+    end
+    return false
+end
+
+local function TrackWeight(id, track)
+    local lerp = tonumber(track.lerpVal) or 1
+    if lerp >= 1 then return 1 end
+
+    local curve = track.lerpCurve or (track.data and track.data.lerp_curve) or 1
+    local legacy = id == "legacy_left_arm" or (track.data and track.data.legacy)
+    if not legacy and isfunction(GCAL.GetTrackBlendFactor) then
+        return math.Clamp(GCAL.GetTrackBlendFactor(track, lerp, curve), 0, 1)
+    end
+    return math.pow(math.Clamp(lerp, 0, 1), curve)
+end
+
+local function VManipBlend()
+    local vmanip = VManip
+    if not istable(vmanip) then return end
+
+    local gesture = vmanip.VMGesture
+    if not IsValid(gesture) then return end
+
+    local active = vmanip.IsValid and vmanip:IsValid()
+    if not active then return end
+
+    local lerp = tonumber(vmanip.VMatrixlerp) or 1
+    if lerp >= 1 then return end
+
+    return gesture, math.pow(math.Clamp(lerp, 0, 1), vmanip.Lerp_Curve or 1)
+end
+
+local restWeight = {}
+
+function SandSwep.AnimatedHands()
+    restWeight.L, restWeight.R = 1, 1
+
+    if HasGCAL() and isfunction(GCAL.GetActiveTrackIDs) then
+        for _, id in ipairs(GCAL:GetActiveTrackIDs()) do
+            local track = GCAL:IsTrackActive(id) and GCAL:GetTrack(id)
+            if track and TrackIsArm(track) then
+                local w = TrackWeight(id, track)
+                for _, name in ipairs(track.bones or VMANIP_BONES) do
+                    local side = ArmSide(name)
+                    if side and w < restWeight[side] then restWeight[side] = w end
+                end
+            end
+        end
+    else
+        local _, w = VManipBlend()
+        if w then restWeight.L = w end
+    end
+
+    return restWeight
+end
+
+local function BlendBones(vm, model, bones, sources, weight)
+    for k, name in ipairs(bones) do
+        local srcName = sources and sources[k] or name
+        if srcName == "ValveBiped.Bip01_L_Ulna" then srcName = "ValveBiped.Bip01_L_Forearm" end
+        if srcName == "ValveBiped.Bip01_R_Ulna" then srcName = "ValveBiped.Bip01_R_Forearm" end
+
+        local bone = vm:LookupBone(name)
+        local src = bone and model:LookupBone(srcName)
+        local cur = src and vm:GetBoneMatrix(bone)
+        local target = cur and model:GetBoneMatrix(src)
+
+        if target then
+            local a, b = target:ToTable(), cur:ToTable()
+            for r = 1, 4 do
+                local ra, rb = a[r], b[r]
+                for c = 1, 4 do ra[c] = ra[c] + (rb[c] - ra[c]) * weight end
+            end
+
+            local out = Matrix(a)
+            out:SetScale(cur:GetScale())
+            vm:SetBoneMatrix(bone, out)
+        end
+    end
+end
+
+local function ApplyGCAL(vm)
+    for _, id in ipairs(GCAL:GetActiveTrackIDs()) do
+        local track = GCAL:IsTrackActive(id) and GCAL:GetTrack(id)
+        if track and IsValid(track.model) and TrackIsArm(track) then
+            local weight = TrackWeight(id, track)
+            if weight < 1 then
+                BlendBones(vm, track.model, track.bones or VMANIP_BONES, track.sourceBones, weight)
+            end
+        end
+    end
+end
+
+function SWEP:VMVManip(vm)
+    if HasGCAL() and isfunction(GCAL.GetActiveTrackIDs) then return ApplyGCAL(vm) end
+
+    local gesture, weight = VManipBlend()
+    if gesture then BlendBones(vm, gesture, VMANIP_BONES, nil, weight) end
+end
+
+local function InterruptReload()
+    local ply = LocalPlayer()
+    local wep = IsValid(ply) and ply:GetActiveWeapon()
+    if IsValid(wep) and wep.IsSandSwep and wep:IsReloading() then
+        RunConsoleCommand("sandswep_interruptreload")
+    end
+end
+
+hook.Add("GCALTrackStarted", "SandSwep_InterruptReload", function(_, _, track)
+    if istable(track) and TrackIsArm(track) then InterruptReload() end
+end)
+
+hook.Add("VManipPostPlayAnim", "SandSwep_InterruptReload", function()
+    if not HasGCAL() then InterruptReload() end
+end)

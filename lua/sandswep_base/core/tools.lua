@@ -275,6 +275,18 @@ if SERVER then
         local wep = ply:GetActiveWeapon()
         if IsValid(wep) and wep.ToggleSafety then wep:ToggleSafety() end
     end)
+
+    concommand.Add("sandswep_interruptreload", function(ply)
+        if not IsValid(ply) then return end
+        if (ply._sandswepInterruptCD or 0) > CurTime() then return end
+        ply._sandswepInterruptCD = CurTime() + 0.1
+
+        local wep = ply:GetActiveWeapon()
+        if not IsValid(wep) or not wep.IsSandSwep or not wep:IsReloading() then return end
+
+        wep:InterruptReload()
+        if not wep:IsReloading() then wep:PlayIdleAnim() end
+    end)
 end
 
 if CLIENT then

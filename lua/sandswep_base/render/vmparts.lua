@@ -6,16 +6,15 @@ local cvHandScale = CreateClientConVar("cl_sandswep_handscale", "0.86", true, fa
 
 local ONE = Vector(1, 1, 1)
 local ZERO = Vector(0, 0, 0)
-local FOREARM_LENGTH = { L = 0.7047, R = 0.7092 }
 local SHOT_BONE_CURVE = { 0, 0, 0, 0, 0.5, 1, 0.843, 0.5, 0.156, 0, 0.061, 0.176, 0.239, 0.176,
     0.061, 0, 0.016, 0.046, 0.063, 0.046, 0.016, 0 }
 
-local HAND_BONES = {}
-for _, side in ipairs({ "L", "R" }) do
-    HAND_BONES[#HAND_BONES + 1] = "ValveBiped.Bip01_" .. side .. "_Hand"
+local HAND_BONES = { L = {}, R = {} }
+for side, list in pairs(HAND_BONES) do
+    list[#list + 1] = "ValveBiped.Bip01_" .. side .. "_Hand"
     for finger = 0, 4 do
         for _, segment in ipairs({ "", "1", "2" }) do
-            HAND_BONES[#HAND_BONES + 1] = "ValveBiped.Bip01_" .. side .. "_Finger" .. finger .. segment
+            list[#list + 1] = "ValveBiped.Bip01_" .. side .. "_Finger" .. finger .. segment
         end
     end
 end
@@ -60,6 +59,59 @@ local function HookWrists(ply)
     hands.SandSwepWristHook = hands:AddCallback("BuildBonePositions", UnsquashWrists)
 end
 
+local forearmRest = {}
+
+local function ForearmRest(model)
+    local rest = forearmRest[model]
+    if rest ~= nil then return rest or nil end
+
+    rest = false
+    local ent = ClientsideModel(model, RENDERGROUP_OTHER)
+    if IsValid(ent) then
+        ent:SetupBones()
+        rest = {}
+        for _, side in ipairs({ "L", "R" }) do
+            local fore = ent:LookupBone("ValveBiped.Bip01_" .. side .. "_Forearm")
+            local hand = ent:LookupBone("ValveBiped.Bip01_" .. side .. "_Hand")
+            local a = fore and ent:GetBoneMatrix(fore)
+            local b = hand and ent:GetBoneMatrix(hand)
+            if a and b then rest[side] = a:GetTranslation():Distance(b:GetTranslation()) end
+        end
+        ent:Remove()
+    end
+
+    forearmRest[model] = rest
+    return rest or nil
+end
+
+function SWEP:VMForearmFit(vm)
+    if self.NoHandScale then return end
+
+    local ply = LocalPlayer()
+    local hands = IsValid(ply) and ply:GetHands()
+    if not IsValid(hands) or hands:GetParent() ~= vm then return end
+
+    local rest = ForearmRest(hands:GetModel())
+    if not rest then return end
+
+    local weights = SandSwep.AnimatedHands and SandSwep.AnimatedHands() or {}
+
+    for side, length in pairs(rest) do
+        local w = weights[side] or 1
+        local fore = vm:LookupBone("ValveBiped.Bip01_" .. side .. "_Forearm")
+        local hand = vm:LookupBone("ValveBiped.Bip01_" .. side .. "_Hand")
+        local a = fore and vm:GetBoneMatrix(fore)
+        local b = hand and vm:GetBoneMatrix(hand)
+        if a and b and length > 0.01 and w > 0 then
+            local fit = a:GetTranslation():Distance(b:GetTranslation()) / length
+            local stretch = 1 + (fit - 1) * w
+            local sc = a:GetScale()
+            a:SetScale(Vector(stretch, sc.y, sc.z))
+            vm:SetBoneMatrix(fore, a)
+        end
+    end
+end
+
 function SWEP:ApplyHandScale(vm)
     if self.NoHandScale then
         ClearHandScale(vm)
@@ -68,26 +120,24 @@ function SWEP:ApplyHandScale(vm)
 
     HookWrists(self:GetOwner())
 
+    local rest = SandSwep.AnimatedHands and SandSwep.AnimatedHands() or {}
+    local weight = { L = math.Round(rest.L or 1, 3), R = math.Round(rest.R or 1, 3) }
     local scale = cvHandScale:GetFloat() * (self.HandScaleMul or 1)
-    local key = vm:GetModel() .. "|" .. scale
+    local key = vm:GetModel() .. "|" .. scale .. "|" .. weight.L .. "|" .. weight.R
     if vm.SandSwepHandScale and vm.SandSwepHandScale.key == key then return end
 
     ClearHandScale(vm)
 
-    local ids, uniform = {}, Vector(scale, scale, scale)
-    for _, name in ipairs(HAND_BONES) do
-        local id = vm:LookupBone(name)
-        if id then
-            vm:ManipulateBoneScale(id, uniform)
-            ids[id] = true
-        end
-    end
-
-    for side, length in pairs(FOREARM_LENGTH) do
-        local id = vm:LookupBone("ValveBiped.Bip01_" .. side .. "_Forearm")
-        if id then
-            vm:ManipulateBoneScale(id, Vector(length, 1, 1))
-            ids[id] = true
+    local ids = {}
+    for side, list in pairs(HAND_BONES) do
+        local s = 1 + (scale - 1) * weight[side]
+        local uniform = Vector(s, s, s)
+        for _, name in ipairs(list) do
+            local id = vm:LookupBone(name)
+            if id then
+                vm:ManipulateBoneScale(id, uniform)
+                ids[id] = true
+            end
         end
     end
 

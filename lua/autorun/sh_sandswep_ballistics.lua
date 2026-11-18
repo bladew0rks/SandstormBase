@@ -1109,6 +1109,15 @@ local function DrawTracer(head, tail, width, alpha)
     render.DrawBeam(head, tail, width, 0, 1, CORE)
 end
 
+local sightTrace, sightOut = { mask = MASK_SOLID_BRUSHONLY }, {}
+
+local function Unblocked(eye, pos)
+    sightTrace.start, sightTrace.endpos, sightTrace.output = eye, pos, sightOut
+
+    local tr = util.TraceLine(sightTrace)
+    return not tr.Hit or tr.HitSky
+end
+
 local function Width(dist, pixel)
     local pixels = MIN_PIXELS + math.min(dist / (500 * UNITS), 1.5)
     return math.max(TRACER_WIDTH, dist * pixel * pixels)
@@ -1141,6 +1150,7 @@ hook.Add("PostDrawTranslucentRenderables", "SandSwep_BallisticsTracers", functio
             local visible = InFront(head, eye, fwd) or InFront(tail, eye, fwd)
             local realHead = head
             if f < 1 then
+                visible = visible and Unblocked(eye, realHead)
                 head = PullIn(head, eye, f, nearHead)
                 tail = PullIn(tail, eye, f, nearTail)
                 width = width * f

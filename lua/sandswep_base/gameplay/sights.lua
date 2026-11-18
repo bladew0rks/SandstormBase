@@ -4,8 +4,10 @@ local SinceTime = SandSwep.BaseShared.SinceTime
 
 -- Attachments
 
+local NO_SLOTS = {}
+
 function SWEP:GetAttachmentSlots()
-    return self.AttachmentSlots or {}
+    return self.AttachmentSlots or NO_SLOTS
 end
 
 local function OverrideDef(wep, id, def)
@@ -389,7 +391,7 @@ end
 local FIREMODE_POSE = { safe = 0, semi = 1, burst = 2, auto = 3 }
 
 function SWEP:ApplyVMFireModePose(vm)
-    if vm:LookupPoseParameter("firemode") < 0 then return end
+    if SandSwep.PoseParamId(vm, "firemode") < 0 then return end
     vm:SetPoseParameter("firemode", FIREMODE_POSE[self:GetFireMode()] or 1)
 end
 
@@ -401,9 +403,14 @@ function SWEP:UpdateVMPoseParams(reset)
     if not IsValid(vm) then return end
 
     if reset then
-        if vm:LookupPoseParameter("firemode") >= 0 then vm:SetPoseParameter("firemode", 0) end
+        if SandSwep.PoseParamId(vm, "firemode") >= 0 then vm:SetPoseParameter("firemode", 0) end
+        self._svModeKey, self._svModeModel = nil, nil
     else
-        self:ApplyVMFireModePose(vm)
+        local mode, model = self:GetFireMode(), vm:GetModel()
+        if self._svModeKey ~= mode or self._svModeModel ~= model then
+            self._svModeKey, self._svModeModel = mode, model
+            self:ApplyVMFireModePose(vm)
+        end
     end
 
     local want = self:GetDesiredPoseParams()
@@ -751,13 +758,31 @@ function SWEP:SetAimState(aim)
     if snd then self:EmitSound(snd) end
 end
 
+local ADS_TOGGLE_POLL = 0.25
+local cvAdsToggle
+
+function SWEP:WantsAimToggle(owner)
+    if CLIENT then
+        cvAdsToggle = cvAdsToggle or GetConVar("cl_sandswep_ads_toggle")
+        return cvAdsToggle ~= nil and cvAdsToggle:GetBool()
+    end
+
+    local ct, last = CurTime(), self._adsToggleAt
+    if self._adsToggleOwner ~= owner or not last or math.abs(ct - last) >= ADS_TOGGLE_POLL then
+        self._adsToggleOwner, self._adsToggleAt = owner, ct
+        self._adsToggle = owner:GetInfoNum("cl_sandswep_ads_toggle", 0) ~= 0
+    end
+
+    return self._adsToggle
+end
+
 function SWEP:UpdateAimInput(owner)
     if CLIENT and game.SinglePlayer() then return end
 
     local rmb = owner:KeyDown(IN_ATTACK2)
 
     local want
-    if owner:GetInfoNum("cl_sandswep_ads_toggle", 0) ~= 0 then
+    if self:WantsAimToggle(owner) then
         if owner:KeyPressed(IN_ATTACK2) then
             self:SetAimToggled(not self:GetAimToggled())
         end

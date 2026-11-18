@@ -184,7 +184,7 @@ function SWEP:Deploy()
     self:SetCoverClose(Vector(0, 0, 0))
 
     if SERVER then
-        self._svPoseKey, self._svBgList = nil, nil
+        self._svPoseKey, self._svModeKey, self._svBgList = nil, nil, nil
         self:UpdateVMBodygroups()
     end
 

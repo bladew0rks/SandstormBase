@@ -275,8 +275,8 @@ function SWEP:ResolveAnim(name, first)
         seqName = seqName[pick]
     end
 
-    local seq = vm:LookupSequence(seqName)
-    if not seq or seq < 0 then return end
+    local seq = SandSwep.SeqId(vm, seqName)
+    if seq < 0 then return end
 
     return vm, seq, entry
 end

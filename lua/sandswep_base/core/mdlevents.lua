@@ -119,7 +119,8 @@ end
 
 function SandSwep.GetSequenceData(model, seq)
     if not isstring(seq) then return end
-    return SandSwep.GetModelSequences(model)[string.lower(seq)]
+    local seqs = SandSwep.GetModelSequences(model)
+    return seqs[seq] or seqs[string.lower(seq)]
 end
 
 function SandSwep.ClearModelSequenceCache()

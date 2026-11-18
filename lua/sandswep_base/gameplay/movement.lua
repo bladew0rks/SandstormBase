@@ -76,7 +76,18 @@ function SWEP:WantsSprint(owner)
 end
 
 function SWEP:UsesSprintAnims()
-    return self:HasAnim("sprint") and self:HasAnim("sprint_in") and self:HasAnim("sprint_out")
+    local owner = self:GetOwner()
+    local vm = IsValid(owner) and owner:IsPlayer() and owner:GetViewModel()
+    if not IsValid(vm) then return false end
+
+    self:GetActiveAnimSets()
+    local key, model = self._animSetKey, vm:GetModel()
+    if self._sprintAnimKey ~= key or self._sprintAnimModel ~= model then
+        self._sprintAnimKey, self._sprintAnimModel = key, model
+        self._sprintAnims = self:HasAnim("sprint") and self:HasAnim("sprint_in") and self:HasAnim("sprint_out")
+    end
+
+    return self._sprintAnims
 end
 
 function SWEP:IsActionBusy()

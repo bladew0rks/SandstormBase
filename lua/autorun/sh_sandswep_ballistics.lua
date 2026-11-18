@@ -265,6 +265,51 @@ local exitEnt
 local function OnlyExitEnt(ent) return ent == exitEnt end
 local function NoEntities() return false end
 
+local MAX_WALK = 8
+local WALK_STEP = 0.25
+
+local function BackExit(pos, far, dir)
+    exitTrace.start = far
+    exitTrace.endpos = pos
+
+    local back = util.TraceLine(exitTrace)
+    if back.StartSolid then return nil end
+
+    return back.Hit and back.HitPos or pos + dir * 0.5
+end
+
+local function WorldExit(pos, dir, depth)
+    local far = pos + dir * depth
+    local cursor = pos + dir * 0.5
+    local exit
+
+    exitTrace.filter = NoEntities
+    exitTrace.ignoreworld = false
+    exitTrace.output = exitOut
+
+    for step = 1, MAX_WALK do
+        exitTrace.start = cursor
+        exitTrace.endpos = far
+
+        local tr = util.TraceLine(exitTrace)
+        if not tr.StartSolid then
+            if step == 1 then return BackExit(pos, far, dir) end
+            return exit
+        end
+
+        if tr.AllSolid or tr.FractionLeftSolid <= 0 then
+            if step == 1 then return BackExit(pos, far, dir) end
+            return nil
+        end
+
+        exit = LerpVector(tr.FractionLeftSolid, cursor, far)
+        cursor = exit + dir * WALK_STEP
+        if cursor:DistToSqr(pos) >= depth * depth then return nil end
+    end
+
+    return nil
+end
+
 local function FindExit(hit, dir, depth)
     local ent = hit.ent
     local pos = hit.pos
@@ -274,28 +319,7 @@ local function FindExit(hit, dir, depth)
         return pos + dir * BODY_DEPTH
     end
 
-    if hit.world or not IsValid(ent) then
-        exitTrace.start = pos + dir * depth
-        exitTrace.endpos = pos
-        exitTrace.filter = NoEntities
-        exitTrace.ignoreworld = false
-        exitTrace.output = exitOut
-
-        local back = util.TraceLine(exitTrace)
-        exitTrace.filter = nil
-        if not back.StartSolid then
-            return back.Hit and back.HitPos or pos + dir * 0.5
-        end
-
-        exitTrace.start = pos + dir * 0.5
-        exitTrace.endpos = pos + dir * depth
-        local fwd = util.TraceLine(exitTrace)
-        if fwd.StartSolid and not fwd.AllSolid and fwd.FractionLeftSolid > 0 then
-            return LerpVector(fwd.FractionLeftSolid, exitTrace.start, exitTrace.endpos)
-        end
-
-        return nil
-    end
+    if hit.world or not IsValid(ent) then return WorldExit(pos, dir, depth) end
 
     exitEnt = ent
     exitTrace.start = pos + dir * depth

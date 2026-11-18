@@ -341,6 +341,10 @@ function SWEP:OnReloaded()
     end
 
     tbl._depSights, tbl._animSets, tbl._attCache, tbl._bgList, tbl._svBgList = nil, nil, nil, nil, nil
+    tbl.SandTPIK_Wrapped = nil      -- the merge put the unwrapped PlayAnim back
+
+    self:UpdateHoldType()           -- the merge also put weapon_base's pistol translate table back
+    self:SetWeaponHoldType(self:GetHoldType())
 end
 
 local function ReloadWeaponFile(class)

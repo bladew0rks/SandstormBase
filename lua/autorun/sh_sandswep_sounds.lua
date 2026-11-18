@@ -34,3 +34,21 @@ SandSwep.AddSound("SandSwep.Dry.SMG", { "sandstorm/shared/foley/smg_dry_fire_01.
 SandSwep.AddSound("SandSwep.Dry.Launcher", { "sandstorm/shared/foley/launcher_dry_fire_01.ogg", "sandstorm/shared/foley/launcher_dry_fire_02.ogg", "sandstorm/shared/foley/launcher_dry_fire_03.ogg" }, { volume = 0.7, level = 60, channel = CHAN_ITEM })
 SandSwep.AddSound("SandSwep.LowAmmo", "weapons/pistol/pistol_empty.wav",
     { volume = 0.35, level = 60, pitch = 100 })
+
+local function BulletBy(place, set, count)
+    local paths = {}
+    for i = 1, count do
+        paths[i] = string.format("sandstorm/shared/bulletby/%s_supersonic_bulletby%s_%02d.ogg", place, set, i)
+    end
+
+    return paths
+end
+
+for _, place in ipairs({ "indoor", "outdoor" }) do
+    local crack = BulletBy(place, "", 10)
+    table.Add(crack, BulletBy(place, "_alt", 12))
+    table.Add(crack, BulletBy(place, "_whizz", 10))
+    table.Add(crack, BulletBy(place, "_alt_whizz", 12))
+
+    SandSwep.AddSound("SandSwep.BulletBy." .. place, crack, { level = 75, pitch = { 96, 104 }, channel = CHAN_STATIC })
+end

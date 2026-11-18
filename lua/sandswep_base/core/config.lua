@@ -23,6 +23,7 @@ SWEP.Primary.DefaultClip    = 30
 SWEP.Primary.Ammo           = "SMG1"
 SWEP.Primary.Automatic      = true
 SWEP.Primary.Damage         = 25
+SWEP.Primary.MinDamage      = 0.3       -- fraction of full damage a slowed bullet still does
 SWEP.Primary.NumShots       = 1
 SWEP.Primary.Spread         = 0.02
 SWEP.Primary.RPM            = 700

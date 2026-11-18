@@ -57,6 +57,22 @@ if SERVER then
     end)
 end
 
+local TRACER_AMMO = { SMG1 = true, AR2 = true, Pistol = true, ["357"] = true, SniperRound = true, SniperPenetratedRound = true }
+
+hook.Add("PreRegisterSWEP", "SandSwep_TracerAmmo", function(swep)
+    local slots, primary = swep.AttachmentSlots, swep.Primary
+    if not istable(slots) or slots.ammo or not istable(primary) then return end
+    if not TRACER_AMMO[primary.Ammo] or (primary.NumShots or 1) > 1 then return end
+
+    slots.ammo = {
+        Name = "Ammo",
+        NoneName = "Ball",
+        Attachments = { "ammo_tracer" },
+        MenuAnchor = "b_wpn",
+    }
+    swep.TracerAmmo = true
+end)
+
 hook.Add("PreRegisterSWEP", "SandSwep_GLSecondaryAmmo", function(swep, class)
     if not istable(swep.AttachmentSlots) then return end
 

@@ -60,6 +60,7 @@ local SLOT_POS = {
     tactical = { 0.07, 0.63 },
     underbarrel = { 0.19, 0.74 },
     magazine = { 0.36, 0.74 },
+    ammo = { 0.36, 0.74 },
     finish = { 0.40, 0.06 },
 }
 local function LayoutGroups(frame, scale)
@@ -77,6 +78,15 @@ local function LayoutGroups(frame, scale)
     end
 
     local pad = 24 * scale
+
+    local ammo, mag = frame.groups.ammo, frame.groups.magazine
+    if IsValid(ammo) and IsValid(mag) and not ammo.slot.MenuPos then
+        local mx, my = mag:GetPos()
+        local gy = my + mag:GetTall() + pad
+        if gy + ammo:GetTall() > h then gy = my - ammo:GetTall() - pad end
+
+        ammo:SetPos(mx, gy)
+    end
 
     local function ClearFixed(gx, gy, gw, gt)
         local moved = true

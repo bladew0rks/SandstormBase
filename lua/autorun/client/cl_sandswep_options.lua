@@ -138,10 +138,9 @@ hook.Add("PopulateToolMenu", "SandSwep_Options", function()
 
         panel:Help("Free aim (enabled in the server options)")
         panel:NumSlider("Recentre speed", "cl_sandswep_deadzone_recenter", 0, 20, 1)
-        panel:NumSlider("Hold breath vignette", "cl_sandswep_focus_vignette", 0, 2, 2)
 
         ResetButton(panel, {"cl_sandswep_ads_toggle", "cl_sandswep_ads_sens", "cl_sandswep_scope_sens", "cl_sandswep_scope_sens_match",
-            "cl_sandswep_deadzone_recenter", "cl_sandswep_focus_vignette"})
+            "cl_sandswep_deadzone_recenter"})
     end)
 
     spawnmenu.AddToolMenuOption("Options", CATEGORY, "sandswep_view", "View & Movement", "", "", function(panel)
@@ -160,12 +159,10 @@ hook.Add("PopulateToolMenu", "SandSwep_Options", function()
 
     spawnmenu.AddToolMenuOption("Options", CATEGORY, "sandswep_scopes", "Scopes", "", "", function(panel)
         panel:ClearControls()
-        panel:NumSlider("Brightness", "cl_sandswep_scope_brightness", 0.2, 1.5, 2)
-        panel:NumSlider("Vignette", "cl_sandswep_scope_vignette", 0, 2, 2)
         panel:NumSlider("Resolution", "cl_sandswep_scope_resolution", 0.25, 1, 2)
         panel:NumSlider("Recoil FOV kick", "cl_sandswep_fovkick", 0, 3, 2)
 
-        ResetButton(panel, {"cl_sandswep_scope_brightness", "cl_sandswep_scope_vignette", "cl_sandswep_scope_resolution", "cl_sandswep_fovkick"})
+        ResetButton(panel, {"cl_sandswep_scope_resolution", "cl_sandswep_fovkick"})
     end)
 
     spawnmenu.AddToolMenuOption("Options", CATEGORY, "sandswep_hud", "HUD", "", "", function(panel)
@@ -196,11 +193,10 @@ hook.Add("PopulateToolMenu", "SandSwep_Options", function()
         panel:CheckBox("Dynamic light", "cl_sandswep_muzzlefx_light")
 
         panel:Help("Weapon lights")
-        panel:NumSlider("Brightness", "cl_sandswep_light_brightness", 0, 10, 2)
         panel:CheckBox("Shadows", "cl_sandswep_light_shadows")
 
         ResetButton(panel, {"cl_sandswep_shells", "cl_sandswep_shell_life", "cl_sandswep_magdrop", "cl_sandswep_magdrop_life",
-            "cl_sandswep_muzzlefx_light", "cl_sandswep_light_brightness", "cl_sandswep_light_shadows"})
+            "cl_sandswep_muzzlefx_light", "cl_sandswep_light_shadows"})
     end)
 
     spawnmenu.AddToolMenuOption("Options", CATEGORY, "sandswep_controls", "Controls", "", "", function(panel)
@@ -255,23 +251,25 @@ hook.Add("PopulateToolMenu", "SandSwep_Options", function()
 
     spawnmenu.AddToolMenuOption("Options", CATEGORY, "sandswep_ballistics", "Ballistics", "", "", function(panel)
         panel:ClearControls()
-        panel:CheckBox("Bullet travel time and drop", "sv_sandswep_ballistics")
-        panel:NumSlider("Bullet drop", "sv_sandswep_ballistics_gravity", 0, 3, 2)
-        panel:NumSlider("Lowest damage at range", "sv_sandswep_ballistics_min_damage", 0, 1, 2)
-        panel:CheckBox("Penetration", "sv_sandswep_penetration")
-        panel:NumSlider("Penetration strength", "sv_sandswep_penetration_mult", 0, 3, 2)
-        panel:NumSlider("Most surfaces per bullet", "sv_sandswep_penetration_max", 0, 10, 0)
-        panel:CheckBox("Tracers", "sv_sandswep_bullet_tracers")
-        panel:NumSlider("Tracer every Nth round", "sv_sandswep_bullet_tracer_every", 1, 10, 0)
-        panel:NumSlider("Tracer burn time (s)", "sv_sandswep_bullet_tracer_time", 0.5, 15, 1)
-        panel:CheckBox("Bullet cracks", "sv_sandswep_bullet_cracks")
-        panel:NumSlider("Debug drawing", "sv_sandswep_ballistics_debug", 0, 4, 0)
-        panel:ControlHelp("1: paths only, 2: short labels, 3: full numbers, 4: full numbers only where bullets stop")
-        panel:NumSlider("Debug drawing lifetime (s)", "sv_sandswep_ballistics_debug_time", 1, 600, 0)
+        panel:CheckBox("Ballistics", "sv_sandswep_ballistics")
+        panel:ControlHelp("Bullets take time to arrive and drop over distance. Off: they hit instantly")
+        panel:NumSlider("Bullet gravity", "sv_sandswep_ballistics_gravity", 0, 3, 2)
+        panel:ControlHelp("Multiplies how fast bullets fall over distance")
+        panel:CheckBox("Bullets go through walls", "sv_sandswep_penetration")
+        panel:NumSlider("Penetration depth", "sv_sandswep_penetration_mult", 0, 3, 2)
+        panel:ControlHelp("Multiplies how much material a bullet can get through")
+        panel:NumSlider("Max penetrations per bullet", "sv_sandswep_penetration_max", 0, 10, 0)
+        panel:ControlHelp("How many walls, props or bodies one bullet can pass through")
+        panel:NumSlider("Ricochet chance", "sv_sandswep_ricochet", 0, 3, 2)
+        panel:ControlHelp("Multiplies how likely bullets are to bounce off hard surfaces at shallow angles. 0: never")
+        panel:NumSlider("Tracer burn time (seconds)", "sv_sandswep_bullet_tracer_time", 0.5, 15, 1)
+        panel:NumSlider("Show bullet paths (debug)", "sv_sandswep_ballistics_debug", 0, 3, 0)
+        panel:ControlHelp("0: off, 1: paths only, 2: paths with short labels, 3: paths with full numbers")
+        panel:NumSlider("Keep bullet paths for (seconds)", "sv_sandswep_ballistics_debug_time", 1, 600, 0)
 
-        ResetButton(panel, {"sv_sandswep_ballistics", "sv_sandswep_ballistics_gravity", "sv_sandswep_ballistics_min_damage",
-            "sv_sandswep_penetration", "sv_sandswep_penetration_mult", "sv_sandswep_penetration_max",
-            "sv_sandswep_bullet_tracers", "sv_sandswep_bullet_tracer_every", "sv_sandswep_bullet_tracer_time", "sv_sandswep_bullet_cracks", "sv_sandswep_ballistics_debug", "sv_sandswep_ballistics_debug_time"})
+        ResetButton(panel, {"sv_sandswep_ballistics", "sv_sandswep_ballistics_gravity",
+            "sv_sandswep_penetration", "sv_sandswep_penetration_mult", "sv_sandswep_penetration_max", "sv_sandswep_ricochet",
+            "sv_sandswep_bullet_tracer_time", "sv_sandswep_ballistics_debug", "sv_sandswep_ballistics_debug_time"})
     end)
 
     spawnmenu.AddToolMenuOption("Options", CATEGORY, "sandswep_developer", "Developer", "", "", function(panel)

@@ -1175,3 +1175,9 @@ SandSwep.RegisterAttachment("optic_pzf3_scope", {
           Reticle = { Texture = RET .. "pzf3", FillLens = true } },
     },
 })
+
+-- Ammunition
+SandSwep.RegisterAttachment("ammo_tracer", {
+    Name = "Tracer Rounds", Slot = "ammo", AmmoType = true,
+    TracerRounds = true,
+})

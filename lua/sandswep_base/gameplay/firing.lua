@@ -32,6 +32,13 @@ function SWEP:GetAmmoDef()
     return cache.ammoDef or nil
 end
 
+function SWEP:GetTracerInterval(ammo)
+    if ammo and ammo.Tracer then return ammo.Tracer end
+    if self.TracerAmmo and not (ammo and ammo.TracerRounds) then return 0 end
+
+    return 1
+end
+
 function SWEP:GetPelletCount()
     local baseCount = self.Primary.NumShots or 1
     local ammo = self:GetAmmoDef()
@@ -243,12 +250,11 @@ SWEP.BarrelZero = 100
 local BARREL_MAX_DIST = 60
 local BARREL_MIN_DOT = math.cos(math.rad(80))
 local BARREL_STALE = 0.5
-local THIRD_MIN_ZERO = 64
 
 local cvBarrel = CreateConVar("sv_sandswep_barrelbullets", "1", SV_FLAGS,
     "Bullets from the barrel", 0, 1)
 
-function SWEP:SetBarrelData(pos, dir, tilt, third)
+function SWEP:SetBarrelData(pos, dir, tilt)
     if pos:Length() > BARREL_MAX_DIST then
         pos = pos:GetNormalized() * BARREL_MAX_DIST
     end
@@ -265,7 +271,6 @@ function SWEP:SetBarrelData(pos, dir, tilt, third)
     barrel.dir = dir
     barrel.time = CurTime()
     barrel.tilt = math.Clamp(tilt or 0, 0, 90)
-    barrel.third = third or nil
 end
 
 local barrelTrace = {}
@@ -279,6 +284,7 @@ function SWEP:GetBarrelShot()
     local usable = cvBarrel:GetBool()
         and IsValid(owner) and owner:IsPlayer()
         and barrel and CurTime() - barrel.time <= BARREL_STALE
+        and not (CLIENT and owner:ShouldDrawLocalPlayer())
 
     if not usable then
         return shootPos, aimDir, shootPos, false
@@ -289,23 +295,8 @@ function SWEP:GetBarrelShot()
     local barrelDir = LocalToWorld(barrel.dir, angle_zero, vector_origin, aimAng)
     barrelDir:Normalize()
 
-    local blend = math.Clamp(self:GetAimProgress(), 0, 1)
-    blend = blend * blend * (3 - 2 * blend)
-    blend = blend * (1 - math.Clamp(barrel.tilt / 5, 0, 1))
-
-    local bore = barrel.pos
-    local sightHeight = self.SightHeight or ((self.HoldType == "pistol" or self.HoldType == "revolver") and 0.8 or 2.6)
-    local boreLocal = Vector(bore.x, Lerp(blend, bore.y, 0), Lerp(blend, bore.z, -sightHeight))
-    local third = barrel.third
-    local bulletStart = third and muzzle or LocalToWorld(boreLocal, angle_zero, shootPos, aimAng)
-
     local zeroDist = (self.BarrelZero or 100) * UNITS_PER_METER
-    if third then
-        local aimTr = SandSwep.TraceLine(shootPos, shootPos + aimDir * zeroDist, owner, MASK_SHOT, barrelTrace)
-        zeroDist = math.max(aimTr.HitPos:Distance(shootPos), THIRD_MIN_ZERO)
-    end
-
-    local zeroDir = shootPos + aimDir * zeroDist - bulletStart
+    local zeroDir = shootPos + aimDir * zeroDist - muzzle
     if self:UsesBallistics(self:GetPelletCount()) then
         local def = self:GetCalibre()
         local speed = self:GetMuzzleVelocity() * UNITS_PER_METER
@@ -313,13 +304,17 @@ function SWEP:GetBarrelShot()
     end
     zeroDir:Normalize()
 
-    local dir = third and zeroDir or LerpVector(blend, barrelDir, zeroDir)
+    local blend = math.Clamp(self:GetAimProgress(), 0, 1)
+    blend = blend * blend * (3 - 2 * blend)
+    blend = blend * (1 - math.Clamp(barrel.tilt / 5, 0, 1))
+
+    local dir = LerpVector(blend, barrelDir, zeroDir)
     dir:Normalize()
 
-    local src = bulletStart
-    local tr = SandSwep.TraceLine(shootPos, bulletStart, owner, MASK_SHOT, barrelTrace)
+    local src = muzzle
+    local tr = SandSwep.TraceLine(shootPos, muzzle, owner, MASK_SHOT, barrelTrace)
     if tr.Hit then
-        src = tr.HitPos - (bulletStart - shootPos):GetNormalized()
+        src = tr.HitPos - (muzzle - shootPos):GetNormalized()
     end
 
     return src, dir, muzzle, true
@@ -335,11 +330,11 @@ if SERVER then
         if now - (ply._sandswepMuzzleT or 0) < 1 / 100 then return end
         ply._sandswepMuzzleT = now
 
-        local pos, dir, tilt, third = net.ReadVector(), net.ReadNormal(), net.ReadUInt(7), net.ReadBool()
+        local pos, dir, tilt = net.ReadVector(), net.ReadNormal(), net.ReadUInt(7)
 
         local wep = ply:GetActiveWeapon()
         if IsValid(wep) and wep.IsSandSwep and wep.SetBarrelData then
-            wep:SetBarrelData(pos, dir, tilt, third)
+            wep:SetBarrelData(pos, dir, tilt)
         end
     end)
 end
@@ -373,12 +368,17 @@ function SWEP:ShootBullet(damage, numBullets, aimcone, ammoType, force, tracer)
         end
     end
 
+    if self.TracerAmmo then bullet.Tracer = self:GetTracerInterval(ammo) end
+
     hook.Run("SandSwep_PreFireBullets", self, bullet)
 
     if self:UsesBallistics(bullet.Num) then
         self:FireBallistic(owner, bullet, ammo)
     else
         owner:FireBullets(bullet)
+        if SERVER then
+            SandSwep.Ballistics.SendCrack(owner, self:GetCalibre(), bullet.Src, bullet.Dir, self:GetMuzzleVelocity() * UNITS_PER_METER)
+        end
     end
     self:TryBreach(src, dir)
     self:ShootEffects()
@@ -404,12 +404,13 @@ function SWEP:FireBallistic(owner, bullet, ammo)
         dir:Normalize()
     end
 
-    local every = ammo and ammo.Tracer or SandSwep.Ballistics.TracerEvery()
+    local every = self:GetTracerInterval(ammo)
 
     SandSwep.Ballistics.Fire(owner, self, bullet.Src, dir, bullet, {
         Def = self:GetCalibre(),
         Speed = self:GetMuzzleVelocity() * UNITS_PER_METER,
         PenMult = (ammo and ammo.PenMult or 1) * (self.PenetrationMult or 1),
+        MinDamage = self.Primary.MinDamage,
         Seed = seed,
         Tracer = every > 0 and seed % every == 0,
     })

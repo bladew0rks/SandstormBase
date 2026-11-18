@@ -198,11 +198,13 @@ local function PoseFlip(wep, ent, def)
 end
 
 function SWEP:DrawVMAttachments(vm, active, aimT)
+    local squashT = aimT * (1 - self:GetPointAimProgress())
+
     for _, ent in pairs(self._vmAttEnts or {}) do
         if not IsValid(ent) then continue end
 
         if active and active.Squash and active.AttSlot == ent.SandSwepSlot then
-            self:SquashOptic(ent, active, Lerp(aimT, 1, active.Squash))
+            self:SquashOptic(ent, active, Lerp(squashT, 1, active.Squash))
         elseif ent.SandSwepSquash then
             ent.SandSwepSquash.s = 1
         end

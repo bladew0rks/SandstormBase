@@ -2,7 +2,7 @@ SandSwep = SandSwep or {}
 
 local FLAGS = bit.bor(FCVAR_ARCHIVE, FCVAR_REPLICATED, FCVAR_NOTIFY)
 local cvShotgun = CreateConVar("sv_sandswep_shotgun_breach", "1", FLAGS, "Shotguns blow doors off their hinges at close range", 0, 1)
-local cvExplosive = CreateConVar("sv_sandswep_explosive_breach", "1", FLAGS, "Explosions blow doors off their hinges", 0, 1)
+local cvExplosive = CreateConVar("sv_sandswep_explosive_breach", "1", FLAGS, "SandSwep explosives blow doors off their hinges", 0, 1)
 local cvRespawn = CreateConVar("sv_sandswep_breach_respawn", "30", FLAGS, "Seconds until a breached door respawns (0 = never)", 0, 600)
 
 SandSwep.BreachShotgunRange = 120
@@ -84,13 +84,20 @@ function SandSwep.BreachDoor(door, dir, speed, activator)
     return true
 end
 
+local function IsSandSwepBlast(inflictor)
+    if not IsValid(inflictor) then return false end
+    return inflictor.IsSandSwep == true or string.StartWith(inflictor:GetClass(), "sandswep_")
+end
+
 hook.Add("EntityTakeDamage", "SandSwep.ExplosiveBreach", function(ent, dmg)
     if not cvExplosive:GetBool() or not dmg:IsDamageType(DMG_BLAST) then return end
     if dmg:GetDamage() < SandSwep.BreachBlastMinDamage or not SandSwep.IsBreachable(ent) then return end
 
-    local from = dmg:GetDamagePosition()
     local inflictor = dmg:GetInflictor()
-    if IsValid(inflictor) and inflictor ~= ent then from = inflictor:GetPos() end
+    if not IsSandSwepBlast(inflictor) then return end
+
+    local from = dmg:GetDamagePosition()
+    if inflictor ~= ent then from = inflictor:GetPos() end
 
     local dir = ent:WorldSpaceCenter() - from
     dir.z = 0

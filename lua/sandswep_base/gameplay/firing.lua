@@ -13,7 +13,7 @@ CreateConVar("sv_sandswep_freeaim_scale", "1", SV_FLAGS,
 local cvDamageMult = CreateConVar("sv_sandswep_damage_mult", "1", SV_FLAGS,
     "Bullet damage multiplier for all weapons", 0, 10)
 
-local INCHES_PER_METER = 39.37
+local UNITS_PER_METER = 39.37
 
 function SWEP:GetDamageMult()
     return cvDamageMult:GetFloat()
@@ -151,7 +151,7 @@ function SWEP:PrimaryAttack()
     if self:IsReloading() or self:IsSafe() then return end
     if self:GetSprintProgress() > 0 then return end
 
-    if self.BoltAction and self:GetNeedsCycle() and self:Clip1() > 0 then
+    if self:IsBoltAction() and self:GetNeedsCycle() and self:Clip1() > 0 then
         self:SetTriggerHeld(true)
         return
     end
@@ -200,7 +200,7 @@ function SWEP:FireShot()
     self:ShootBullet(self.Primary.Damage, self:GetPelletCount(), self:GetCurrentSpread(), self.Primary.Ammo)
     self:SetClip1(self:Clip1() - 1)
 
-    if not self.BoltAction then self:EjectCasing() end
+    if not self:IsBoltAction() then self:EjectCasing() end
 
     if owner:IsPlayer() then
         self:ApplyRecoil(owner)
@@ -288,26 +288,31 @@ function SWEP:GetBarrelShot()
     local barrelDir = LocalToWorld(barrel.dir, angle_zero, vector_origin, aimAng)
     barrelDir:Normalize()
 
-    local zeroDist = (self.BarrelZero or 100) * INCHES_PER_METER
-    local zeroDir = shootPos + aimDir * zeroDist - muzzle
-    if self:UsesBallistics(self:GetPelletCount()) then
-        local def = self:GetCalibre()
-        local speed = self:GetMuzzleVelocity() * INCHES_PER_METER
-        zeroDir.z = zeroDir.z + SandSwep.Ballistics.DropAt(def, SandSwep.Ballistics.TimeAtSpeed(def, speed), zeroDist)
-    end
-    zeroDir:Normalize()
-
     local blend = math.Clamp(self:GetAimProgress(), 0, 1)
     blend = blend * blend * (3 - 2 * blend)
     blend = blend * (1 - math.Clamp(barrel.tilt / 5, 0, 1))
 
+    local bore = barrel.pos
+    local sightHeight = self.SightHeight or ((self.HoldType == "pistol" or self.HoldType == "revolver") and 0.8 or 2.6)
+    local boreLocal = Vector(bore.x, Lerp(blend, bore.y, 0), Lerp(blend, bore.z, -sightHeight))
+    local bulletStart = LocalToWorld(boreLocal, angle_zero, shootPos, aimAng)
+
+    local zeroDist = (self.BarrelZero or 100) * UNITS_PER_METER
+    local zeroDir = shootPos + aimDir * zeroDist - bulletStart
+    if self:UsesBallistics(self:GetPelletCount()) then
+        local def = self:GetCalibre()
+        local speed = self:GetMuzzleVelocity() * UNITS_PER_METER
+        zeroDir.z = zeroDir.z + SandSwep.Ballistics.DropAt(def, SandSwep.Ballistics.TimeAtSpeed(def, speed), zeroDist)
+    end
+    zeroDir:Normalize()
+
     local dir = LerpVector(blend, barrelDir, zeroDir)
     dir:Normalize()
 
-    local src = muzzle
-    local tr = SandSwep.TraceLine(shootPos, muzzle, owner, MASK_SHOT, barrelTrace)
+    local src = bulletStart
+    local tr = SandSwep.TraceLine(shootPos, bulletStart, owner, MASK_SHOT, barrelTrace)
     if tr.Hit then
-        src = tr.HitPos - (muzzle - shootPos):GetNormalized()
+        src = tr.HitPos - (bulletStart - shootPos):GetNormalized()
     end
 
     return src, dir, muzzle, true
@@ -392,11 +397,11 @@ function SWEP:FireBallistic(owner, bullet, ammo)
         dir:Normalize()
     end
 
-    local every = bullet.Tracer or 5
+    local every = ammo and ammo.Tracer or SandSwep.Ballistics.TracerEvery()
 
     SandSwep.Ballistics.Fire(owner, self, bullet.Src, dir, bullet, {
         Def = self:GetCalibre(),
-        Speed = self:GetMuzzleVelocity() * INCHES_PER_METER,
+        Speed = self:GetMuzzleVelocity() * UNITS_PER_METER,
         PenMult = (ammo and ammo.PenMult or 1) * (self.PenetrationMult or 1),
         Seed = seed,
         Tracer = every > 0 and seed % every == 0,
@@ -408,9 +413,10 @@ function SWEP:ShootEffects()
     local aimed = self:GetAimProgress() > 0.5
     local baseAnim = (aimed and self:HasAnim("iron_fire")) and "iron_fire" or "fire"
     local spare = self.Tubes and self:GetOtherTube() or 0
-    local fed = self.BoltAction and self:GetFedShots() + 1 or 0
-    local needsCycle = self.BoltAction and self:Clip1() + spare > 1 and fed >= self:GetShotsPerCycle()
-    if self.BoltAction then self:SetFedShots((needsCycle or self:Clip1() + spare <= 1) and 0 or fed) end
+    local manual = self:IsBoltAction()
+    local fed = manual and self:GetFedShots() + 1 or 0
+    local needsCycle = manual and self:Clip1() + spare > 1 and fed >= self:GetShotsPerCycle()
+    if manual then self:SetFedShots((needsCycle or self:Clip1() + spare <= 1) and 0 or fed) end
 
     local anim = baseAnim
     if self:Clip1() + spare <= 1 and self:HasAnim(baseAnim .. "_last") then

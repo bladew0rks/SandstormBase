@@ -701,8 +701,19 @@ function SWEP:GetActiveSight()
     return sight
 end
 
+function SWEP:AttachmentsBlockAim()
+    local cache = self:AttCache()
+    if cache.noAim == nil then
+        cache.noAim = false
+        for _, _, def in self:IterAttachments() do
+            if def.NoAim then cache.noAim = true break end
+        end
+    end
+    return cache.noAim
+end
+
 function SWEP:CanAim()
-    if self:IsSafe() or self:ActionBlocks("aim") then return false end
+    if self:IsSafe() or self:ActionBlocks("aim") or self:AttachmentsBlockAim() then return false end
     if self:GetSprintProgress() > 0 then return false end      -- sprinting or still coming out of it
     if self:IsBipodBusy() then return false end                -- bipod going down / coming up
     if self:IsReloading() and not self.AimDuringReload then return false end

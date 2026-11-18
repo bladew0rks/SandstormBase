@@ -36,7 +36,7 @@ function SWEP:CanStartReload()
 end
 
 function SWEP:NeedsEmptyReload()
-    return self:Clip1() <= 0 or (self.BoltAction and self:GetNeedsCycle()) or false
+    return self:Clip1() <= 0 or (self:IsBoltAction() and self:GetNeedsCycle()) or false
 end
 
 function SWEP:StartReload()
@@ -56,7 +56,7 @@ function SWEP:StartReload()
     local soundDuration = len / speed
     self:PlayAnim(animName, speed)
 
-    local entry = self.BoltAction and empty and self:GetAnimEntry(animName)
+    local entry = self:IsBoltAction() and empty and self:GetAnimEntry(animName)
     if entry and entry.Eject then self:SetEjectAt(ct + entry.Eject / speed) end
 
     self:BeginAction("reload", duration)

@@ -543,7 +543,7 @@ local CYCLE_HIP = {
 }
 
 local function hipCycle(wep, tpik, state, seq)
-    if not wep.BoltAction or wep.TubeFed then return seq, false end
+    if not (wep.IsBoltAction and wep:IsBoltAction()) or wep.TubeFed then return seq, false end
 
     local map = state.cycleMap
     if not map then

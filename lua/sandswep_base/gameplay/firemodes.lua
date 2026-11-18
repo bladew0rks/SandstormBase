@@ -97,6 +97,11 @@ function SWEP:ApplyFireMode(idx)
     self:SetFireModeIndex(idx)
     self:SetNextSecondaryFire(ct + self.FireModeSwitchDelay)
 
+    if self.ManualFireModes and not self:IsSafe() and not self:IsBoltAction() then
+        self:SetNeedsCycle(false)
+        self:SetFedShots(0)
+    end
+
     if wasSafe and not self:IsSafe() then
         self:SetNextPrimaryFire(math.max(self:GetNextPrimaryFire(), ct + self.SafeRaiseTime))
     end

@@ -44,8 +44,17 @@ function SWEP:GetShotsPerCycle()
     return self.ShotsPerCycle or 1
 end
 
+function SWEP:IsBoltAction()
+    local manual = self.ManualFireModes
+    if not manual then return self.BoltAction == true end
+
+    local mode = self:GetFireMode()
+    if mode == "safe" then mode = self:GetFireModes()[self:GetLastFireModeIndex()] or mode end
+    return manual[mode] == true
+end
+
 function SWEP:CanCycleBolt()
-    if not self.BoltAction or not self:GetNeedsCycle() or self:GetCycleAt() > 0 then return false end
+    if not self:IsBoltAction() or not self:GetNeedsCycle() or self:GetCycleAt() > 0 then return false end
     if self:Clip1() <= 0 and not (self.Tubes and self:GetOtherTube() > 0) then return false end
     if self:IsReloading() or self:GetCurrentAction() or self:IsHolstering() or self:GetGLMode() then return false end
     if self:GetSprinting() or self:GetSprintProgress() > 0 or self:GetBurstLeft() > 0 then return false end
@@ -215,7 +224,7 @@ end
 
 function SWEP:StartInsertReload()
     local pending = self.TubeFed and self:GetNeedsCycle() and self:Clip1() > 0
-    local empty = self:Clip1() <= 0 or (self.BoltAction and self:GetNeedsCycle() and not pending)
+    local empty = self:Clip1() <= 0 or (self:IsBoltAction() and self:GetNeedsCycle() and not pending)
     local clip = self:UsesClipLoad()
     local name = clip and "insert_clip"
         or ((empty and self:HasAnim("insert_start_empty")) and "insert_start_empty" or "insert_start")
@@ -226,7 +235,7 @@ function SWEP:StartInsertReload()
     self:CancelBoltCycle()
     if self:TubeFull() then self:SwapTubes() end
 
-    local live = self.BoltAction and not empty and self:IsChambered() and not self.TubeFed
+    local live = self:IsBoltAction() and not empty and self:IsChambered() and not self.TubeFed
     local mark = clip and "MagIn" or ((self.TubeFed and empty) and "RoundIn" or nil)
 
     self:SetInsertStop(false)
@@ -309,7 +318,7 @@ function SWEP:InterruptInsertReload()
     if self.TubeFed then
         self:SetNeedsCycle(self:GetNeedsCycle() and self:Clip1() > 0)
     else
-        self:SetNeedsCycle(self.BoltAction and phase ~= 0 and self:Clip1() > 0 or false)
+        self:SetNeedsCycle(self:IsBoltAction() and phase ~= 0 and self:Clip1() > 0 or false)
     end
     self:CancelReload()
 end

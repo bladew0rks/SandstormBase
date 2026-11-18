@@ -9,7 +9,7 @@ local RELOAD_NONE, RELOAD_TACTICAL, RELOAD_QUICK = 0, 1, 2
 local RELOAD_RESUME, RELOAD_BOLT, RELOAD_INSERT = 3, 4, 5
 local STAGE_NONE, STAGE_MAGOUT, STAGE_BOLT = 0, 1, 2
 
-local FIREMODE_LABELS = { safe = "SAFE", semi = "SEMI", burst = "BURST", auto = "AUTO" }
+local FIREMODE_LABELS = { safe = "SAFE", semi = "SEMI", burst = "BURST", auto = "AUTO", pump = "PUMP" }
 
 local function SinceTime(startTime)
     return math.max(CurTime() - startTime, 0)

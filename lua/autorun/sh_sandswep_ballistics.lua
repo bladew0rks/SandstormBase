@@ -313,6 +313,11 @@ local function FindExit(hit, dir, depth)
     return tr.HitPos
 end
 
+local function Stopped(hit, head, mat, reason)
+    if Debugging() then hit.why, hit.whyShort = head .. " | " .. reason, mat .. ": " .. reason end
+    return false
+end
+
 local function Penetrate(state, hit)
     hit.why, hit.whyShort = nil, nil
     if hit.sky then return false end
@@ -325,25 +330,31 @@ local function Penetrate(state, hit)
     local head = Debugging() and string.format("%s at %.0f m/s | %s (%s%s), reaches %.1f cm", def.Name, hit.speed / UNITS, mat, class,
         fill ~= 1 and string.format(", %d%% solid", fill * 100) or "", reach) or ""
 
-    if not cvPen:GetBool() then hit.why, hit.whyShort = head .. " | penetration off", mat .. ": penetration off" return false end
-    if state.Pens >= cvPenMax:GetInt() then hit.why, hit.whyShort = head .. " | surface limit reached", mat .. ": surface limit reached" return false end
-    if hit.disp then hit.why, hit.whyShort = head .. " | terrain stops bullets", mat .. ": terrain stops bullets" return false end
-    if class == "none" or reach <= 0 then hit.why, hit.whyShort = head .. " | impenetrable", mat .. ": impenetrable" return false end
+    if not cvPen:GetBool() then return Stopped(hit, head, mat, "penetration off") end
+    if state.Pens >= cvPenMax:GetInt() then return Stopped(hit, head, mat, "surface limit reached") end
+    if hit.disp then return Stopped(hit, head, mat, "terrain stops bullets") end
+    if class == "none" or reach <= 0 then return Stopped(hit, head, mat, "impenetrable") end
 
     local depth = math.min(reach / CM_PER_UNIT, MAX_DEPTH)
-    if depth < 0.5 then hit.why, hit.whyShort = head .. " | can't reach 0.5 units", mat .. ": can't reach 0.5 units" return false end
+    if depth < 0.5 then return Stopped(hit, head, mat, "can't reach 0.5 units") end
 
     local dir = state.Dir
     local exit = FindExit(hit, dir, depth + 1)
-    if not exit then hit.why, hit.whyShort = string.format("%s | thicker than its max %.1f u (%.0f cm)", head, depth, depth * CM_PER_UNIT), string.format("%s: more than %.0f cm", mat, depth * CM_PER_UNIT) return false end
+    if not exit then
+        if Debugging() then hit.why, hit.whyShort = string.format("%s | thicker than its max %.1f u (%.0f cm)", head, depth, depth * CM_PER_UNIT), string.format("%s: more than %.0f cm", mat, depth * CM_PER_UNIT) end
+        return false
+    end
 
     local thick = exit:Distance(hit.pos)
     local cost = thick * CM_PER_UNIT
     local left = 1 - cost / reach
-    if left <= 0.05 then hit.why, hit.whyShort = string.format("%s | %.1f u (%.0f cm) thick", head, thick, cost), string.format("%s: %.0f cm, reaches %.0f", mat, cost, reach) return false end
+    if left <= 0.05 then
+        if Debugging() then hit.why, hit.whyShort = string.format("%s | %.1f u (%.0f cm) thick", head, thick, cost), string.format("%s: %.0f cm, reaches %.0f", mat, cost, reach) end
+        return false
+    end
 
     local speed = hit.speed * math.sqrt(left)
-    if speed < MIN_SPEED then hit.why, hit.whyShort = head .. " | too slow after it", mat .. ": too slow after it" return false end
+    if speed < MIN_SPEED then return Stopped(hit, head, mat, "too slow after it") end
 
     if Debugging() then
         DebugCross(hit.pos, COL_PEN)
@@ -402,7 +413,7 @@ end
 local shot = { Num = 1, Spread = Vector(0, 0, 0) }
 local p0, p1 = Vector(), Vector()
 
-local function FireSegment(state, e, dur, from, to, tracer, col)
+local function FireSegment(state, e, dur, from, to, tracer, col, dry)
     local dir = to - from
     local len = dir:Length()
     if len < 0.01 then
@@ -413,8 +424,8 @@ local function FireSegment(state, e, dur, from, to, tracer, col)
 
     local waterHit = false
     waterTrace.start, waterTrace.endpos, waterTrace.output = from, to, waterOut
-    local wtr = util.TraceLine(waterTrace)
-    if wtr.Hit and not wtr.StartSolid then
+    local wtr = not dry and util.TraceLine(waterTrace)
+    if wtr and wtr.Hit and not wtr.StartSolid then
         local cut = math.min(len, len * wtr.Fraction + UNDERWATER)
         dur = dur * cut / len
         len = cut
@@ -497,7 +508,7 @@ local function Launch(state)
         end
         local s = Copy(state)
         live[#live + 1] = s
-        if not s.Tracer then
+        if not s.Tracer and cvCracks:GetBool() then
             outgoing[#outgoing + 1] = { s.Def.Id, Vector(s.Origin), Vector(s.Dir), s.Tau, s.E, s.Owner, false, -1 }
         end
     end
@@ -580,11 +591,8 @@ function B.Fire(owner, wep, src, dir, bullet, opts)
     Release(state)
 end
 
-local function Step(state, dt)
-    PosAt(state, state.E, p0)
-    PosAt(state, state.E + dt, p1)
-
-    FireSegment(state, state.E, dt, p0, p1, false, COL_FLIGHT)
+local function Step(state, dt, dry)
+    FireSegment(state, state.E, dt, p0, p1, false, COL_FLIGHT, dry)
 
     if hit.water then return false end
 
@@ -606,17 +614,19 @@ end
 
 local probe, probeOut = { mask = bit.bor(MASK_SHOT, WATER) }, {}
 local probeFilter = {}
+local probeDry = false
 
-local function Clear(state)
+local function Clear(state, dt)
     probeFilter[1] = state.Owner
     probeFilter[2] = state.Ignore
     probe.start = PosAt(state, state.E, p0)
-    probe.endpos = PosAt(state, state.E + engine.TickInterval(), p1)
+    probe.endpos = PosAt(state, state.E + dt, p1)
     probe.filter = probeFilter
     probe.output = probeOut
 
     local tr = util.TraceLine(probe)
     probeFilter[1], probeFilter[2], probe.filter = nil, nil, nil
+    probeDry = tr.Hit and tr.HitWorld and not tr.StartSolid and bit.band(tr.Contents or 0, WATER) == 0
 
     if tr.HitSky then
         if Debugging() then
@@ -660,6 +670,7 @@ if SERVER then
         if n == 0 then return end
 
         local dt = engine.TickInterval()
+        local debugging = Debugging()
 
         for i = n, 1, -1 do
             local s = live[i]
@@ -668,28 +679,28 @@ if SERVER then
             local endPos, whyShort
 
             if keep then
-                local clear = Clear(s)
+                local clear = Clear(s, dt)
                 if clear == nil then
                     keep, why = false, "left the map (sky)"
                 elseif clear then
-                    if Debugging() then DebugLine(p0, p1, COL_FLIGHT) end
+                    if debugging then DebugLine(p0, p1, COL_FLIGHT) end
                     s.E = s.E + dt
                     s.Age = s.Age + dt
                     keep = Alive(s)
                 else
-                    keep = Step(s, dt)
-                    if not keep then
+                    keep = Step(s, dt, probeDry)
+                    if not keep and debugging then
                         endPos = (hit.water or hit.hit) and hit.pos
                         why = hit.water and "water" or hit.sky and "left the map (sky)" or hit.hit and "stopped: " .. (hit.why or "?") or nil
                         whyShort = hit.hit and not hit.water and not hit.sky and "stopped: " .. (hit.whyShort or "?") or nil
                     end
                 end
-                if not keep and not why then
+                if not keep and not why and debugging then
                     why = s.Age >= LIFETIME and "lifetime" or B.SpeedAt(s.Def, s.Tau + s.E) <= MIN_SPEED and "too slow" or "end of table"
                 end
             end
 
-            if not keep and Debugging() and s.Def then
+            if not keep and debugging and s.Def then
                 local at = endPos or PosAt(s, s.E, p1)
                 DebugEnd(at, string.format("%s (%.2f s in flight)", why or "?", s.Age), endPos and hit.hit and COL_HIT or nil, whyShort or why)
             end
@@ -868,23 +879,25 @@ end)
 
 local wallTrace, wallOut = { mask = bit.bor(MASK_SOLID_BRUSHONLY, WATER) }, {}
 
+local closest = Vector()
+
 local function NearMiss(v, eye)
     local a, b = v.Prev, v.Pos
-    local ab = b - a
-    local len2 = ab:LengthSqr()
+    local ax, ay, az = a.x, a.y, a.z
+    local abx, aby, abz = b.x - ax, b.y - ay, b.z - az
+    local len2 = abx * abx + aby * aby + abz * abz
     if len2 < 1 then return end
 
-    local t = math.Clamp((eye - a):Dot(ab) / len2, 0, 1)
-    local closest = a + ab * t
+    local t = math.Clamp(((eye.x - ax) * abx + (eye.y - ay) * aby + (eye.z - az) * abz) / len2, 0, 1)
+    closest:SetUnpacked(ax + abx * t, ay + aby * t, az + abz * t)
     if closest:DistToSqr(eye) > CRACK_RADIUS * CRACK_RADIUS then return end
 
     v.Cracked = true
     EmitSound("Bullets.DefaultNearmiss", closest, 0, CHAN_STATIC, 1, 75, 0, math.random(95, 105))
 end
 
-local function TailTime(v, dt)
-    local speed = math.max(B.SpeedAt(v.Def, v.Tau + v.E), 1)
-    return math.max(v.StartE, v.E - math.max(TRACER_LENGTH / speed, dt * SHUTTER))
+local function TailTime(v, dt, speed)
+    return math.max(v.StartE, v.E - math.max(TRACER_LENGTH / math.max(speed, 1), dt * SHUTTER))
 end
 
 hook.Add("Think", "SandSwep_BallisticsVisuals", function()
@@ -896,6 +909,8 @@ hook.Add("Think", "SandSwep_BallisticsVisuals", function()
 
     local me = LocalPlayer()
     local eye = IsValid(me) and me:EyePos()
+    local cracks = cvCracks:GetBool()
+    local burnTime = cvTracerTime:GetFloat()
 
     for i = n, 1, -1 do
         local v = visuals[i]
@@ -918,7 +933,7 @@ hook.Add("Think", "SandSwep_BallisticsVisuals", function()
             v.Age = v.Age + step
             PosAt(v, v.E, v.Pos)
 
-            if v.Tracer and v.Age >= cvTracerTime:GetFloat() then
+            if v.Tracer and v.Age >= burnTime then
                 v.Stopped = true
                 v.Fade = 0
                 remove = true
@@ -938,15 +953,18 @@ hook.Add("Think", "SandSwep_BallisticsVisuals", function()
                     stop = true
                 end
 
-                if eye and not v.Cracked and v.Owner ~= me and cvCracks:GetBool() then NearMiss(v, eye) end
+                if eye and not v.Cracked and v.Owner ~= me and cracks then NearMiss(v, eye) end
             end
 
-            v.TailE = TailTime(v, dt)
-            if stop or not Alive(v) then
+            local speed = B.SpeedAt(v.Def, v.Tau + v.E)
+            v.TailE = TailTime(v, dt, speed)
+            if stop or v.Age >= LIFETIME or v.Tau + v.E >= v.Def.Duration or speed <= MIN_SPEED then
                 v.Stopped = true
                 if not v.Tracer then remove = true end
             end
         end
+
+        if not v.Tracer and (v.Cracked or not cracks or v.Owner == me) then remove = true end
 
         if remove then
             visuals[i] = visuals[#visuals]
@@ -974,8 +992,49 @@ hook.Add("RenderScene", "SandSwep_BallisticsView", function(origin, angles)
     histCount = math.min(histCount + 1, HISTORY)
 end)
 
-local tailPos, nearHead, nearTail = Vector(), Vector(), Vector()
-local stripPts, stripAge = {}, {}
+local tailPos, nearHead, nearTail, toPoint = Vector(), Vector(), Vector(), Vector()
+local stripPts = {}
+local smearMats, smearAge, smearCount, smearFrame = {}, {}, 0, -1
+local viewMat, histMat = Matrix(), Matrix()
+
+local function SmearFrames(now)
+    local frame = FrameNumber()
+    if smearFrame == frame then return smearCount end
+    smearFrame = frame
+
+    viewMat:SetTranslation(viewPos)
+    viewMat:SetAngles(viewAng)
+
+    local n = 0
+    for k = 0, histCount - 1 do
+        local h = history[(histHead - 1 - k) % HISTORY + 1]
+        local age = now - h.t
+        if age > EXPOSURE then break end
+        n = n + 1
+
+        local mat = smearMats[n]
+        if not mat then
+            mat = Matrix()
+            smearMats[n] = mat
+        end
+
+        histMat:SetTranslation(h.pos)
+        histMat:SetAngles(h.ang)
+        histMat:InvertTR()
+        mat:Set(viewMat)
+        mat:Mul(histMat)
+        smearAge[n] = age / EXPOSURE
+    end
+
+    smearCount = n
+    return n
+end
+
+local function InFront(pos, eye, fwd)
+    toPoint:Set(pos)
+    toPoint:Sub(eye)
+    return toPoint:Dot(fwd) > 0
+end
 
 local function TracerTail(v, out)
     return PosAt(v, v.TailE, out)
@@ -989,34 +1048,31 @@ local function PullIn(pos, eye, f, out)
 end
 
 local function SmearStrip(head, width, alpha, now, eye, f)
-    local n = 0
-    for k = 0, histCount - 1 do
-        local h = history[(histHead - 1 - k) % HISTORY + 1]
-        local age = now - h.t
-        if age > EXPOSURE then break end
-        n = n + 1
-        local pt = stripPts[n]
+    local n = SmearFrames(now)
+    if n < 2 then return end
+
+    for k = 1, n do
+        local pt = stripPts[k]
         if not pt then
             pt = Vector()
-            stripPts[n] = pt
+            stripPts[k] = pt
         end
-        pt:Set(LocalToWorld(WorldToLocal(head, angle_zero, h.pos, h.ang), angle_zero, viewPos, viewAng))
+        pt:Set(smearMats[k] * head)
         if f < 1 then PullIn(pt, eye, f, pt) end
-        stripAge[n] = age / EXPOSURE
     end
-    if n < 2 or stripPts[1]:DistToSqr(stripPts[n]) < width * width then return end
+    if stripPts[1]:DistToSqr(stripPts[n]) < width * width then return end
 
     render.SetMaterial(tracerMat)
     render.StartBeam(n)
     for k = 1, n do
-        GLOW.a = 110 * alpha * (1 - stripAge[k])
-        render.AddBeam(stripPts[k], width * 2.5, stripAge[k], GLOW)
+        GLOW.a = 110 * alpha * (1 - smearAge[k])
+        render.AddBeam(stripPts[k], width * 2.5, smearAge[k], GLOW)
     end
     render.EndBeam()
     render.StartBeam(n)
     for k = 1, n do
-        CORE.a = 255 * alpha * (1 - stripAge[k])
-        render.AddBeam(stripPts[k], width, stripAge[k], CORE)
+        CORE.a = 255 * alpha * (1 - smearAge[k])
+        render.AddBeam(stripPts[k], width, smearAge[k], CORE)
     end
     render.EndBeam()
 end
@@ -1029,8 +1085,7 @@ local function DrawTracer(head, tail, width, alpha)
     render.DrawBeam(head, tail, width, 0, 1, CORE)
 end
 
-local function Width(pos, eye, pixel)
-    local dist = pos:Distance(eye)
+local function Width(dist, pixel)
     local pixels = MIN_PIXELS + math.min(dist / (500 * UNITS), 1.5)
     return math.max(TRACER_WIDTH, dist * pixel * pixels)
 end
@@ -1038,7 +1093,8 @@ end
 hook.Add("PostDrawTranslucentRenderables", "SandSwep_BallisticsTracers", function(depth, sky)
     if depth or sky or #visuals == 0 or not cvTracers:GetBool() then return end
 
-    local eye = EyePos()
+    local eye, fwd = EyePos(), EyeVector()
+    local pip = SandSwep.RenderingPIP == true
     local setup = render.GetViewSetup and render.GetViewSetup()
     local fov = setup and setup.fov or 90
     local pixel = 2 * math.tan(math.rad(fov) * 0.5) / math.max(ScrH(), 1)
@@ -1054,26 +1110,30 @@ hook.Add("PostDrawTranslucentRenderables", "SandSwep_BallisticsTracers", functio
             local head = v.Pos
             local tail = TracerTail(v, tailPos)
             local heat, thin = Burn(v)
-            local width = Width(head, eye, pixel) * thin
-            local alpha = math.max(v.Fade, 0) * heat
             local dist = head:Distance(eye)
+            local width = Width(dist, pixel) * thin
+            local alpha = math.max(v.Fade, 0) * heat
             local f = dist > farDraw and farDraw / dist or 1
+            local visible = InFront(head, eye, fwd) or InFront(tail, eye, fwd)
             local realHead = head
             if f < 1 then
                 head = PullIn(head, eye, f, nearHead)
                 tail = PullIn(tail, eye, f, nearTail)
                 width = width * f
+                dist = farDraw
             end
 
-            DrawTracer(head, tail, width, alpha)
+            if visible then
+                DrawTracer(head, tail, width, alpha)
 
-            if smear then SmearStrip(realHead, width, alpha, now, eye, f) end
+                if smear then SmearStrip(realHead, width, alpha, now, eye, f) end
 
-            render.SetMaterial(glowMat)
-            CORE.a = 200 * alpha
-            render.DrawSprite(head, width * 3, width * 3, CORE)
+                render.SetMaterial(glowMat)
+                CORE.a = 200 * alpha
+                render.DrawSprite(head, width * 3, width * 3, CORE)
+            end
 
-            if lights < MAX_LIGHTS and not v.Stopped and not v.Sky and head:DistToSqr(eye) < 2000 * 2000 then
+            if not pip and lights < MAX_LIGHTS and not v.Stopped and not v.Sky and dist < 2000 then
                 lights = lights + 1
                 local light = DynamicLight(0x5A000 + i)
                 if light then

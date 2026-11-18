@@ -262,7 +262,7 @@ local function GripCurve(vm, time)
 end
 
 function SWEP:ApplyGripWeight(vm)
-    if SandSwep.PoseParamId(vm, "gripweight") < 0 then return end
+    if vm:LookupPoseParameter("gripweight") < 0 then return end
 
     local rate = 1 / cvGripTime:GetFloat()
     local target = GripTarget(vm, rate)

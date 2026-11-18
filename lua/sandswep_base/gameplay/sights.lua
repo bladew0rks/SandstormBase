@@ -391,7 +391,7 @@ end
 local FIREMODE_POSE = { safe = 0, semi = 1, burst = 2, auto = 3 }
 
 function SWEP:ApplyVMFireModePose(vm)
-    if SandSwep.PoseParamId(vm, "firemode") < 0 then return end
+    if vm:LookupPoseParameter("firemode") < 0 then return end
     vm:SetPoseParameter("firemode", FIREMODE_POSE[self:GetFireMode()] or 1)
 end
 
@@ -403,7 +403,7 @@ function SWEP:UpdateVMPoseParams(reset)
     if not IsValid(vm) then return end
 
     if reset then
-        if SandSwep.PoseParamId(vm, "firemode") >= 0 then vm:SetPoseParameter("firemode", 0) end
+        if vm:LookupPoseParameter("firemode") >= 0 then vm:SetPoseParameter("firemode", 0) end
         self._svModeKey, self._svModeModel = nil, nil
     else
         local mode, model = self:GetFireMode(), vm:GetModel()

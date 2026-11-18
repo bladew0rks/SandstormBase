@@ -580,35 +580,46 @@ PickDeltas = function(rig, mat, ctx)
     return ctx.base
 end
 
-local gfMove, gfTmp = Matrix(), Matrix()
+local gfBase, gfInv, gfTmp = Matrix(), Matrix(), Matrix()
 
 local function ReuseFrameCache(vm, frameCache)
     vm.SandSwepGripAlpha = frameCache.alpha
-    gfMove:SetTranslation(vm:GetPos())
-    gfMove:SetAngles(vm:GetAngles())
-    gfMove:Mul(frameCache.inv)
+    gfBase:SetTranslation(vm:GetPos())
+    gfBase:SetAngles(vm:GetAngles())
 
-    local out = frameCache.rig.out
-    for _, i in ipairs(frameCache.rig.list) do
-        gfTmp:Set(gfMove)
-        gfTmp:Mul(out[i])
-        vm:SetBoneMatrix(i, gfTmp)
+    for k = 1, frameCache.n do
+        gfTmp:Set(gfBase)
+        gfTmp:Mul(frameCache.loc[k])
+        vm:SetBoneMatrix(frameCache.ids[k], gfTmp)
     end
 end
 
 local function StoreFrameCache(vm, rig, frame, seq, cycle, pose, model)
     local frameCache = vm.SandSwepGripFrame
-    if not frameCache or not frameCache.inv then
-        frameCache = { inv = Matrix() }
+    if not frameCache or not frameCache.loc then
+        frameCache = { loc = {}, ids = {} }
         vm.SandSwepGripFrame = frameCache
     end
 
-    local inv = frameCache.inv
-    inv:SetTranslation(vm:GetPos())
-    inv:SetAngles(vm:GetAngles())
-    inv:InvertTR()
+    gfInv:SetTranslation(vm:GetPos())
+    gfInv:SetAngles(vm:GetAngles())
+    gfInv:InvertTR()
 
-    frameCache.rig, frameCache.frame, frameCache.seq, frameCache.cycle = rig, frame, seq, cycle
+    local out = rig.out
+    local count = 0
+    for _, i in ipairs(rig.list) do
+        count = count + 1
+        local mat = frameCache.loc[count]
+        if not mat then
+            mat = Matrix()
+            frameCache.loc[count] = mat
+        end
+        mat:Set(gfInv)
+        mat:Mul(out[i])
+        frameCache.ids[count] = i
+    end
+
+    frameCache.n, frameCache.frame, frameCache.seq, frameCache.cycle = count, frame, seq, cycle
     frameCache.pose, frameCache.model, frameCache.alpha = pose, model, vm.SandSwepGripAlpha
 end
 
@@ -692,7 +703,7 @@ function SWEP:VMGrip(vm)
 
     local frame, seq, cycle = FrameNumber(), vm:GetSequence(), vm:GetCycle()
     local frameCache = vm.SandSwepGripFrame
-    local reuse = frameCache and frameCache.inv and frameCache.frame == frame
+    local reuse = frameCache and frameCache.loc and frameCache.frame == frame
         and frameCache.seq == seq and frameCache.cycle == cycle
         and frameCache.pose == pose and frameCache.model == model
 

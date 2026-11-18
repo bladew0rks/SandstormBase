@@ -21,46 +21,6 @@ function SandSwep.BoneId(ent, name)
     return id or nil
 end
 
-local seqIds = {}
-function SandSwep.SeqId(ent, name)
-    local model = ent:GetModel()
-    if not model then return ent:LookupSequence(name) or -1 end
-
-    local ids = seqIds[model]
-    if not ids then
-        ids = {}
-        seqIds[model] = ids
-    end
-
-    local id = ids[name]
-    if id == nil then
-        id = ent:LookupSequence(name) or -1
-        if id >= 0 or ent:GetSequenceCount() > 0 then ids[name] = id end
-    end
-
-    return id
-end
-
-local poseIds = {}
-function SandSwep.PoseParamId(ent, name)
-    local model = ent:GetModel()
-    if not model then return ent:LookupPoseParameter(name) end
-
-    local ids = poseIds[model]
-    if not ids then
-        ids = {}
-        poseIds[model] = ids
-    end
-
-    local id = ids[name]
-    if id == nil then
-        id = ent:LookupPoseParameter(name)
-        if id >= 0 or ent:GetSequenceCount() > 0 then ids[name] = id end
-    end
-
-    return id
-end
-
 local traceIn = {}
 function SandSwep.TraceLine(start, endpos, filter, mask, out)
     traceIn.start = start

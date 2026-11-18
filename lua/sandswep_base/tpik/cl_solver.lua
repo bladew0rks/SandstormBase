@@ -358,19 +358,20 @@ local function snapshot(ent, state)
 
     for i = 0, ent:GetBoneCount() - 1 do
         local mat = entityGetBoneMatrix(ent, i)
-        if mat then
-            local keep = from[i]
-            if not keep then
-                keep = Matrix()
-                from[i] = keep
-            end
-
-            keep:Set(toLocalMat)
-            keep:Mul(mat)
-            valid[i] = true
-        else
+        if not mat then
             valid[i] = false
+            continue
         end
+
+        local keep = from[i]
+        if not keep then
+            keep = Matrix()
+            from[i] = keep
+        end
+
+        keep:Set(toLocalMat)
+        keep:Mul(mat)
+        valid[i] = true
     end
 end
 
@@ -390,18 +391,18 @@ local function applyBlend(ent, state, numBones)
     local from, valid = state.blendFrom, state.blendOk
 
     for i = 0, numBones - 1 do
-        if valid[i] then
-            local mat = entityGetBoneMatrix(ent, i)
-            if mat then
-                localMat:Set(toLocalMat)
-                localMat:Mul(mat)
-                blendMatrix(from[i], localMat, weight, localMat)
+        if not valid[i] then continue end
 
-                worldMat:Set(baseMat)
-                worldMat:Mul(localMat)
-                entitySetBoneMatrix(ent, i, worldMat)
-            end
-        end
+        local mat = entityGetBoneMatrix(ent, i)
+        if not mat then continue end
+
+        localMat:Set(toLocalMat)
+        localMat:Mul(mat)
+        blendMatrix(from[i], localMat, weight, localMat)
+
+        worldMat:Set(baseMat)
+        worldMat:Mul(localMat)
+        entitySetBoneMatrix(ent, i, worldMat)
     end
 end
 
@@ -1117,20 +1118,20 @@ local function applyToPlayer(ply, numBones)
 
     local copied = 0
     for k = 1, map.n do
-        if not (dropLeft and left[k]) then
-            local mat = entityGetBoneMatrix(tpik, src[k])
-            if mat and entityGetBoneMatrix(ply, dst[k]) then
-                local bonePos = mat:GetTranslation()
-                bonePos.x = mathClamp(bonePos.x, spineX - clamp, spineX + clamp)
-                bonePos.y = mathClamp(bonePos.y, spineY - clamp, spineY + clamp)
-                bonePos.z = mathClamp(bonePos.z, spineZ - clamp, spineZ + clamp)
+        if dropLeft and left[k] then continue end
 
-                mat:SetTranslation(bonePos)
-                if scaled then mat:SetScale(handScale) end
-                entitySetBoneMatrix(ply, dst[k], mat)
-                copied = copied + 1
-            end
-        end
+        local mat = entityGetBoneMatrix(tpik, src[k])
+        if not mat or not entityGetBoneMatrix(ply, dst[k]) then continue end
+
+        local bonePos = mat:GetTranslation()
+        bonePos.x = mathClamp(bonePos.x, spineX - clamp, spineX + clamp)
+        bonePos.y = mathClamp(bonePos.y, spineY - clamp, spineY + clamp)
+        bonePos.z = mathClamp(bonePos.z, spineZ - clamp, spineZ + clamp)
+
+        mat:SetTranslation(bonePos)
+        if scaled then mat:SetScale(handScale) end
+        entitySetBoneMatrix(ply, dst[k], mat)
+        copied = copied + 1
     end
 
     data.copied = copied

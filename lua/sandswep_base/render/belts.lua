@@ -279,23 +279,26 @@ hook.Add("Think", "SandSwep_DroppedBelts", function()
 
         if ct - belt.born > life + FADE_TIME then
             table.remove(dropped, i)
-        elseif not belt.asleep then
-            belt.acc = (belt.acc or 0) + dt
-
-            local steps = 0
-            while belt.acc >= DROP_STEP and steps < 6 do
-                belt.acc = belt.acc - DROP_STEP
-                steps = steps + 1
-
-                if StepDropped(belt, ply) < 0.0004 then
-                    belt.calm = belt.calm + DROP_STEP
-                else
-                    belt.calm = 0
-                end
-            end
-
-            if belt.calm > 0.5 or ct - belt.born > 6 then belt.asleep = true end
+            continue
         end
+
+        if belt.asleep then continue end
+
+        belt.acc = (belt.acc or 0) + dt
+
+        local steps = 0
+        while belt.acc >= DROP_STEP and steps < 6 do
+            belt.acc = belt.acc - DROP_STEP
+            steps = steps + 1
+
+            if StepDropped(belt, ply) < 0.0004 then
+                belt.calm = belt.calm + DROP_STEP
+            else
+                belt.calm = 0
+            end
+        end
+
+        if belt.calm > 0.5 or ct - belt.born > 6 then belt.asleep = true end
     end
 end)
 
@@ -310,24 +313,24 @@ hook.Add("PostDrawOpaqueRenderables", "SandSwep_DroppedBelts", function(depth, s
     local life = cvShellLife:GetFloat()
 
     for _, belt in ipairs(dropped) do
-        if not belt.vmStage or ct - belt.born > EJECT_VM_TIME + 0.1 then
-            belt.vmStage = false
+        if belt.vmStage and ct - belt.born <= EJECT_VM_TIME + 0.1 then continue end
 
-            local ent = LinkModel(belt.mdl)
-            if IsValid(ent) then
-                local fading = ct - belt.born > life
-                if fading then
-                    ent:SetRenderMode(RENDERMODE_TRANSCOLOR)
-                    ent:SetColor(Color(255, 255, 255, (1 - math.Clamp((ct - belt.born - life) / FADE_TIME, 0, 1)) * 255))
-                end
+        belt.vmStage = false
 
-                DrawLinks(belt, ent, Identity, 1)
+        local ent = LinkModel(belt.mdl)
+        if not IsValid(ent) then continue end
 
-                if fading then
-                    ent:SetColor(Color(255, 255, 255, 255))
-                    ent:SetRenderMode(RENDERMODE_NORMAL)
-                end
-            end
+        local fading = ct - belt.born > life
+        if fading then
+            ent:SetRenderMode(RENDERMODE_TRANSCOLOR)
+            ent:SetColor(Color(255, 255, 255, (1 - math.Clamp((ct - belt.born - life) / FADE_TIME, 0, 1)) * 255))
+        end
+
+        DrawLinks(belt, ent, Identity, 1)
+
+        if fading then
+            ent:SetColor(Color(255, 255, 255, 255))
+            ent:SetRenderMode(RENDERMODE_NORMAL)
         end
     end
 end)
@@ -336,17 +339,18 @@ local function DrawYoungBelts(info)
     local ct = CurTime()
 
     for _, belt in ipairs(dropped) do
-        if belt.vmStage then
-            local age = ct - belt.born
-            if age >= EJECT_VM_TIME then
-                belt.vmStage = false
-            else
-                local ent = LinkModel(belt.mdl)
-                if IsValid(ent) then
-                    local scale = Lerp(math.Clamp(age / EJECT_VM_TIME, 0, 1), 1, 1 / info.k)
-                    DrawLinks(belt, ent, function(pos) return view.ToVM(pos, info) end, scale)
-                end
-            end
+        if not belt.vmStage then continue end
+
+        local age = ct - belt.born
+        if age >= EJECT_VM_TIME then
+            belt.vmStage = false
+            continue
+        end
+
+        local ent = LinkModel(belt.mdl)
+        if IsValid(ent) then
+            local scale = Lerp(math.Clamp(age / EJECT_VM_TIME, 0, 1), 1, 1 / info.k)
+            DrawLinks(belt, ent, function(pos) return view.ToVM(pos, info) end, scale)
         end
     end
 end

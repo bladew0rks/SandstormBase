@@ -20,21 +20,22 @@ for _, fileName in ipairs(file.Find(DIR .. "*.lua", "LUA")) do
 
     if SERVER then
         AddCSLuaFile(path)
+        continue
+    end
+
+    local ok, data = pcall(include, path)
+
+    local problem
+    if ok then
+        problem = GripDataProblem(data)
     else
-        local ok, data = pcall(include, path)
+        problem = tostring(data)
+    end
 
-        local problem
-        if ok then
-            problem = GripDataProblem(data)
-        else
-            problem = tostring(data)
-        end
-
-        if problem then
-            ErrorNoHalt("[sandswep grip] " .. path .. ": " .. problem .. "\n")
-        else
-            SandSwep.GripData[string.lower(data.model)] = data
-        end
+    if problem then
+        ErrorNoHalt("[sandswep grip] " .. path .. ": " .. problem .. "\n")
+    else
+        SandSwep.GripData[string.lower(data.model)] = data
     end
 end
 

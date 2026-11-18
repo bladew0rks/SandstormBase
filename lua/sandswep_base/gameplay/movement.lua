@@ -435,19 +435,25 @@ function SWEP:HandleReloadKey(mv)
         elseif not self:IsReloading() and not self:IsMagChecking() then
             self:SetReloadPressTime(ct)
         end
-    elseif wasHeld and not down then
+        return
+    end
+
+    if wasHeld and not down then
         self:SetReloadKeyHeld(false)
         if pressTime > 0 then
             self:SetReloadPressTime(0)
             if not self:IsMagChecking() then self:StartReload() end
         end
-    elseif down and pressTime > 0 then
-        if self:IsMagChecking() or self:IsReloading() then
-            self:SetReloadPressTime(0)
-        elseif ct - pressTime >= self.MagCheckHoldTime then
-            self:SetReloadPressTime(0)
-            self:StartMagCheck()
-        end
+        return
+    end
+
+    if not down or pressTime <= 0 then return end
+
+    if self:IsMagChecking() or self:IsReloading() then
+        self:SetReloadPressTime(0)
+    elseif ct - pressTime >= self.MagCheckHoldTime then
+        self:SetReloadPressTime(0)
+        self:StartMagCheck()
     end
 end
 

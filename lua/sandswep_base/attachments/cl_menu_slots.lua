@@ -14,8 +14,9 @@ local function CollectSlotEntries(wep, slots)
     local entries, byGroup = {}, {}
     for _, slotName in ipairs(names) do
         local slot = slots[slotName]
-        if slot.Hidden or (slot.RequiresSlot and not wep:GetSlotAttachment(slot.RequiresSlot)) then
-        elseif slot.Group then
+        if slot.Hidden or (slot.RequiresSlot and not wep:GetSlotAttachment(slot.RequiresSlot)) then continue end
+
+        if slot.Group then
             local entry = byGroup[slot.Group]
             if not entry then
                 entry = { key = slot.Group, tabs = {} }

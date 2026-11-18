@@ -61,28 +61,28 @@ local function AmmoHit(wep, ammo, attacker, tr, dmg)
     end
 
     local explosion = ammo.Explode
-    if explosion then
-        local pos = tr.HitPos + tr.HitNormal * 2
+    if not explosion then return end
 
-        if explosion.Particle then
-            ParticleEffect(explosion.Particle, tr.HitPos, tr.HitNormal:Angle())
-        else
-            local fx = EffectData()
-            fx:SetOrigin(pos)
-            fx:SetNormal(tr.HitNormal)
-            fx:SetMagnitude(explosion.Magnitude or 1)
-            fx:SetScale(explosion.Scale or 1)
-            fx:SetRadius(explosion.Radius)
-            util.Effect(explosion.Effect or "HelicopterMegaBomb", fx, true, true)
-        end
+    local pos = tr.HitPos + tr.HitNormal * 2
 
-        local pitch = explosion.SoundPitch or { 110, 125 }
-        sound.Play(explosion.Sound or "BaseExplosionEffect.Sound", pos, explosion.SoundLevel or 85, math.random(pitch[1], pitch[2]), explosion.SoundVolume or 0.7)
-
-        local inflictor = IsValid(wep) and wep or attacker
-        util.BlastDamage(inflictor, attacker, pos, explosion.Radius, explosion.Damage * wep:GetDamageMult())
-        util.Decal("SmallScorch", tr.HitPos + tr.HitNormal, tr.HitPos - tr.HitNormal)
+    if explosion.Particle then
+        ParticleEffect(explosion.Particle, tr.HitPos, tr.HitNormal:Angle())
+    else
+        local fx = EffectData()
+        fx:SetOrigin(pos)
+        fx:SetNormal(tr.HitNormal)
+        fx:SetMagnitude(explosion.Magnitude or 1)
+        fx:SetScale(explosion.Scale or 1)
+        fx:SetRadius(explosion.Radius)
+        util.Effect(explosion.Effect or "HelicopterMegaBomb", fx, true, true)
     end
+
+    local pitch = explosion.SoundPitch or { 110, 125 }
+    sound.Play(explosion.Sound or "BaseExplosionEffect.Sound", pos, explosion.SoundLevel or 85, math.random(pitch[1], pitch[2]), explosion.SoundVolume or 0.7)
+
+    local inflictor = IsValid(wep) and wep or attacker
+    util.BlastDamage(inflictor, attacker, pos, explosion.Radius, explosion.Damage * wep:GetDamageMult())
+    util.Decal("SmallScorch", tr.HitPos + tr.HitNormal, tr.HitPos - tr.HitNormal)
 end
 
 function SWEP:GetCalibre()

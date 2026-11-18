@@ -460,18 +460,18 @@ function SWEP:PlayFireSounds(clipAfter)
     end
 
     local distant = self:GetFireSound("Distant")
-    if SERVER and distant then
-        local owner = self:GetOwner()
-        local pos = self:GetPos()
-        local range = (fs.DistantRange or 1500) ^ 2
+    if not SERVER or not distant then return end
 
-        local filter = RecipientFilter()
-        for _, ply in ipairs(player.GetHumans()) do
-            if ply ~= owner and ply:GetPos():DistToSqr(pos) > range then filter:AddPlayer(ply) end
-        end
+    local owner = self:GetOwner()
+    local pos = self:GetPos()
+    local range = (fs.DistantRange or 1500) ^ 2
 
-        if filter:GetCount() > 0 then
-            self:EmitSound(self:PickSound(distant, "Distant"), fs.DistantLevel or 140, 100, 1, CHAN_STATIC, 0, 0, filter)
-        end
+    local filter = RecipientFilter()
+    for _, ply in ipairs(player.GetHumans()) do
+        if ply ~= owner and ply:GetPos():DistToSqr(pos) > range then filter:AddPlayer(ply) end
+    end
+
+    if filter:GetCount() > 0 then
+        self:EmitSound(self:PickSound(distant, "Distant"), fs.DistantLevel or 140, 100, 1, CHAN_STATIC, 0, 0, filter)
     end
 end

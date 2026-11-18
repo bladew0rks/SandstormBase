@@ -45,21 +45,21 @@ concommand.Add("sandswep_shuffle", function(ply)
 
     local parts, skins = {}, {}
     for slotName, slot in pairs(wep:GetAttachmentSlots()) do
-        if not slot.Hidden then
-            local options = {}
-            for _, id in ipairs(slot.Attachments or {}) do
-                if wep:CanAttach(slotName, id) then options[#options + 1] = id end
-            end
+        if slot.Hidden then continue end
 
-            if #options > 0 and math.random() < 0.75 then
-                local id = options[math.random(#options)]
-                parts[#parts + 1] = slotName .. "=" .. id
+        local options = {}
+        for _, id in ipairs(slot.Attachments or {}) do
+            if wep:CanAttach(slotName, id) then options[#options + 1] = id end
+        end
 
-                local def = SandSwep.Attachments[id]
-                if def.Skins and #def.Skins > 1 then
-                    skins[#skins + 1] = slotName .. "=" .. (math.random(#def.Skins) - 1)
-                end
-            end
+        if #options == 0 or math.random() >= 0.75 then continue end
+
+        local id = options[math.random(#options)]
+        parts[#parts + 1] = slotName .. "=" .. id
+
+        local def = SandSwep.Attachments[id]
+        if def.Skins and #def.Skins > 1 then
+            skins[#skins + 1] = slotName .. "=" .. (math.random(#def.Skins) - 1)
         end
     end
 

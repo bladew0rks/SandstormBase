@@ -172,21 +172,22 @@ local function DrawPreviewGun(self, preview, wep, w, h)
         gun:SetupBones()
         gun:DrawModel()
         for _, ent in pairs(preview.atts) do
-            if IsValid(ent) then
-                if ent.SandSwepOffset then
-                    local attOffset = ent.SandSwepOffset
-                    local framePos, frameAng = SandSwep.OffsetFrame(gun, attOffset)
-                    if framePos then
-                        local attPos, attAng = LocalToWorld(attOffset.Pos or vector_origin, attOffset.Ang or angle_zero, framePos, frameAng)
-                        ent:SetPos(attPos)
-                        ent:SetAngles(attAng)
-                        ent:SetupBones()
-                        ent:DrawModel()
-                    end
-                else
-                    ent:DrawModel()
-                end
+            if not IsValid(ent) then continue end
+
+            if not ent.SandSwepOffset then
+                ent:DrawModel()
+                continue
             end
+
+            local attOffset = ent.SandSwepOffset
+            local framePos, frameAng = SandSwep.OffsetFrame(gun, attOffset)
+            if not framePos then continue end
+
+            local attPos, attAng = LocalToWorld(attOffset.Pos or vector_origin, attOffset.Ang or angle_zero, framePos, frameAng)
+            ent:SetPos(attPos)
+            ent:SetAngles(attAng)
+            ent:SetupBones()
+            ent:DrawModel()
         end
 
         render.SetLocalModelLights({})

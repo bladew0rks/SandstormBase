@@ -58,18 +58,18 @@ hook.Add("PostDrawTranslucentRenderables", "SandSwep_Lasers", function(depth, sk
 
     for _, ply in player.Iterator() do
         local wep, def = TacticalState(ply, "Laser")
-        if wep then
-            local tr = AimTrace(ply)
-            if tr.Hit then
-                local col = def.LaserColor or LASER_COLOR
-                render.SetMaterial(matDot)
+        if not wep then continue end
 
-                local pos = tr.HitPos + tr.HitNormal * 0.5
-                local size = 3 + math.Rand(0, 0.6)
-                render.DrawSprite(pos, size, size, col)
-                render.DrawSprite(pos, size * 0.4, size * 0.4, color_white)
-            end
-        end
+        local tr = AimTrace(ply)
+        if not tr.Hit then continue end
+
+        local col = def.LaserColor or LASER_COLOR
+        render.SetMaterial(matDot)
+
+        local pos = tr.HitPos + tr.HitNormal * 0.5
+        local size = 3 + math.Rand(0, 0.6)
+        render.DrawSprite(pos, size, size, col)
+        render.DrawSprite(pos, size * 0.4, size * 0.4, color_white)
     end
 end)
 
@@ -108,40 +108,40 @@ hook.Add("Think", "SandSwep_Lights", function()
 
     for _, ply in ipairs((SandSwep.Holders())) do
         local wep, def = TacticalState(ply, "Light")
-        if wep then
-            local light = lights[ply]
-            if not IsValid(light) then
-                light = ProjectedTexture()
-                lights[ply] = light
-                lightKeys[ply] = nil
-            end
+        if not wep then continue end
 
-            local bright, shadows = cvLightBright:GetFloat(), cvLightShadows:GetBool()
-            local key = lightKeys[ply]
-            if not key or key[1] ~= def or key[2] ~= bright or key[3] ~= shadows then
-                lightKeys[ply] = { def, bright, shadows }
-                local cfg = LightConfig(def)
-                light:SetTexture(cfg.Texture)
-                light:SetFarZ(cfg.FarZ)
-                light:SetFOV(cfg.FOV)
-                light:SetBrightness(cfg.Brightness)
-                light:SetColor(cfg.Color)
-                light:SetEnableShadows(cfg.Shadows)
-            end
-
-            local rayPos, rayDir = DeviceRay(ply, "Light")
-            if rayPos then
-                light:SetPos(rayPos)
-                light:SetAngles(rayDir:Angle())
-            else
-                local ang = ply:EyeAngles()
-                local base = ply:GetShootPos() + ang:Right() * 4 - ang:Up() * 3
-                local tr = SandSwep.TraceLine(base, base + ang:Forward() * 22, ply, MASK_SHOT, lightTrace)
-                light:SetPos(base + ang:Forward() * math.max(tr.Fraction * 22 - 2, 0))   -- never inside a wall
-                light:SetAngles(ply:GetAimVector():Angle())
-            end
-
-            light:Update()
+        local light = lights[ply]
+        if not IsValid(light) then
+            light = ProjectedTexture()
+            lights[ply] = light
+            lightKeys[ply] = nil
         end
+
+        local bright, shadows = cvLightBright:GetFloat(), cvLightShadows:GetBool()
+        local key = lightKeys[ply]
+        if not key or key[1] ~= def or key[2] ~= bright or key[3] ~= shadows then
+            lightKeys[ply] = { def, bright, shadows }
+            local cfg = LightConfig(def)
+            light:SetTexture(cfg.Texture)
+            light:SetFarZ(cfg.FarZ)
+            light:SetFOV(cfg.FOV)
+            light:SetBrightness(cfg.Brightness)
+            light:SetColor(cfg.Color)
+            light:SetEnableShadows(cfg.Shadows)
+        end
+
+        local rayPos, rayDir = DeviceRay(ply, "Light")
+        if rayPos then
+            light:SetPos(rayPos)
+            light:SetAngles(rayDir:Angle())
+        else
+            local ang = ply:EyeAngles()
+            local base = ply:GetShootPos() + ang:Right() * 4 - ang:Up() * 3
+            local tr = SandSwep.TraceLine(base, base + ang:Forward() * 22, ply, MASK_SHOT, lightTrace)
+            light:SetPos(base + ang:Forward() * math.max(tr.Fraction * 22 - 2, 0))   -- never inside a wall
+            light:SetAngles(ply:GetAimVector():Angle())
+        end
+
+        light:Update()
     end
 end)

@@ -11,18 +11,18 @@ function SWEP:GetSeqBlends()
     local blendIn, blendOut = {}, {}
     local function Scan(entries)
         for _, entry in pairs(entries or {}) do
-            if istable(entry) and (entry.BlendIn or entry.BlendOut) then
-                local inTime = entry.BlendIn
-                if inTime and entry.From and self.ResumeBlendMax then
-                    inTime = math.min(inTime, self.ResumeBlendMax)
-                end
+            if not istable(entry) or not (entry.BlendIn or entry.BlendOut) then continue end
 
-                for _, name in ipairs(EntrySequences(entry)) do
-                    if isstring(name) then
-                        name = string.lower(name)
-                        if inTime then blendIn[name] = inTime end
-                        if entry.BlendOut then blendOut[name] = entry.BlendOut end
-                    end
+            local inTime = entry.BlendIn
+            if inTime and entry.From and self.ResumeBlendMax then
+                inTime = math.min(inTime, self.ResumeBlendMax)
+            end
+
+            for _, name in ipairs(EntrySequences(entry)) do
+                if isstring(name) then
+                    name = string.lower(name)
+                    if inTime then blendIn[name] = inTime end
+                    if entry.BlendOut then blendOut[name] = entry.BlendOut end
                 end
             end
         end
@@ -221,28 +221,29 @@ function SWEP:VMBoneBlend(vm, numBones)
 
     for i = 0, numBones - 1 do
         local mat = vm:GetBoneMatrix(i)
-        if mat then
-            loc:Set(toLocal)
-            loc:Mul(mat)
+        if not mat then
+            if capture then current[i] = nil end
+            continue
+        end
 
-            local from = blend and blend.from[i]
-            if from then
-                BlendMatrix(from, loc, weight, loc)
-                world:Set(base)
-                world:Mul(loc)
-                vm:SetBoneMatrix(i, world)
-            end
+        loc:Set(toLocal)
+        loc:Mul(mat)
 
-            if capture then
-                local keep = current[i]
-                if not keep then
-                    keep = Matrix()
-                    current[i] = keep
-                end
-                keep:Set(loc)
+        local from = blend and blend.from[i]
+        if from then
+            BlendMatrix(from, loc, weight, loc)
+            world:Set(base)
+            world:Mul(loc)
+            vm:SetBoneMatrix(i, world)
+        end
+
+        if capture then
+            local keep = current[i]
+            if not keep then
+                keep = Matrix()
+                current[i] = keep
             end
-        elseif capture then
-            current[i] = nil
+            keep:Set(loc)
         end
     end
 

@@ -198,25 +198,26 @@ hook.Add("PostDrawViewModel", "SandSwep_Shells", function(vm, ply, wep)
     local ct = CurTime()
     for _, shell in ipairs(shells) do
         local ent = shell.ent
-        if shell.vmStage and IsValid(ent) then
-            local age = ct - shell.born
-            if age >= EJECT_VM_TIME then
-                LeaveViewmodel(shell)
-            else
-                local worldPos = ent:GetPos()
-                local scale = Lerp(math.Clamp(age / EJECT_VM_TIME, 0, 1), 1, 1 / info.k)
+        if not shell.vmStage or not IsValid(ent) then continue end
 
-                scaleVec:SetUnpacked(scale, scale, scale)
-                scaleMatrix:Identity()
-                scaleMatrix:Scale(scaleVec)
-                ent:EnableMatrix("RenderMultiply", scaleMatrix)
-
-                ent:SetPos(view.ToVM(worldPos, info))
-                ent:SetupBones()
-                ent:DrawModel()
-                ent:SetPos(worldPos)
-            end
+        local age = ct - shell.born
+        if age >= EJECT_VM_TIME then
+            LeaveViewmodel(shell)
+            continue
         end
+
+        local worldPos = ent:GetPos()
+        local scale = Lerp(math.Clamp(age / EJECT_VM_TIME, 0, 1), 1, 1 / info.k)
+
+        scaleVec:SetUnpacked(scale, scale, scale)
+        scaleMatrix:Identity()
+        scaleMatrix:Scale(scaleVec)
+        ent:EnableMatrix("RenderMultiply", scaleMatrix)
+
+        ent:SetPos(view.ToVM(worldPos, info))
+        ent:SetupBones()
+        ent:DrawModel()
+        ent:SetPos(worldPos)
     end
 
     SandSwep.DrawViewmodelBelts(wep, vm, info)
@@ -339,23 +340,24 @@ hook.Add("Think", "SandSwep_Shells", function()
 
         if not valid or age > life + FADE_TIME then
             RemoveShell(i)
-        else
-            if shell.vmStage and age > EJECT_VM_TIME + 0.1 then LeaveViewmodel(shell) end
-            if not shell.rest and dt > 0 then MoveShell(shell, dt, ply) end
+            continue
+        end
 
-            if age > life then
-                if not shell.fading then
-                    shell.fading = true
-                    ent:SetRenderMode(RENDERMODE_TRANSCOLOR)
-                end
+        if shell.vmStage and age > EJECT_VM_TIME + 0.1 then LeaveViewmodel(shell) end
+        if not shell.rest and dt > 0 then MoveShell(shell, dt, ply) end
 
-                local alpha = math.floor((1 - math.Clamp((age - life) / FADE_TIME, 0, 1)) * 255)
-                if alpha ~= shell.alpha then
-                    shell.alpha = alpha
-                    fadeColor.a = alpha
-                    ent:SetColor(fadeColor)
-                end
-            end
+        if age <= life then continue end
+
+        if not shell.fading then
+            shell.fading = true
+            ent:SetRenderMode(RENDERMODE_TRANSCOLOR)
+        end
+
+        local alpha = math.floor((1 - math.Clamp((age - life) / FADE_TIME, 0, 1)) * 255)
+        if alpha ~= shell.alpha then
+            shell.alpha = alpha
+            fadeColor.a = alpha
+            ent:SetColor(fadeColor)
         end
     end
 end)

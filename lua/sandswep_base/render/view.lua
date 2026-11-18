@@ -188,18 +188,18 @@ local function UpdateWalkState(wep, bob, ply, gait)
 
     bob.dbgDt, bob.dbgReal, bob.dbgSpeed, bob.dbgRate = dt, RealFrameTime(), speed, 0
 
-    if grounded and speed > WALK_MIN_SPEED then
-        local rate = math.Clamp(speed / refSpeed, STRIDE_RATE_MIN, STRIDE_RATE_MAX) / gait.StrideTime
-        bob.dbgRate = rate
-        bob.phase = (bob.phase + dt * rate) % 1
+    if not grounded or speed <= WALK_MIN_SPEED then return end
 
-        local sum = math.abs(velFwd) + math.abs(velRight)
-        local blend = math.min(1, dt * WALK_DIR_EASE)
-        bob.n = Lerp(blend, bob.n, math.max(velFwd, 0) / sum)
-        bob.s = Lerp(blend, bob.s, math.max(-velFwd, 0) / sum)
-        bob.e = Lerp(blend, bob.e, math.max(velRight, 0) / sum)
-        bob.w = Lerp(blend, bob.w, math.max(-velRight, 0) / sum)
-    end
+    local rate = math.Clamp(speed / refSpeed, STRIDE_RATE_MIN, STRIDE_RATE_MAX) / gait.StrideTime
+    bob.dbgRate = rate
+    bob.phase = (bob.phase + dt * rate) % 1
+
+    local sum = math.abs(velFwd) + math.abs(velRight)
+    local blend = math.min(1, dt * WALK_DIR_EASE)
+    bob.n = Lerp(blend, bob.n, math.max(velFwd, 0) / sum)
+    bob.s = Lerp(blend, bob.s, math.max(-velFwd, 0) / sum)
+    bob.e = Lerp(blend, bob.e, math.max(velRight, 0) / sum)
+    bob.w = Lerp(blend, bob.w, math.max(-velRight, 0) / sum)
 end
 
 function SWEP:GetWalkBob(aimT, sprintVis, animSprint)

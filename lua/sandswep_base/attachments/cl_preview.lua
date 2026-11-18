@@ -58,49 +58,49 @@ local function AddPreviewAttachments(preview, wep, gun)
         if mount and mount.Except and mount.Except[id] then mount = nil end
 
         local ent = mount and wep.GetMountOffset and ClientsideModel(mount.Model, RENDERGROUP_OPAQUE)
-        if IsValid(ent) then
-            ent:SetNoDraw(true)
-            if mount.Rail then
-                ent.SandSwepOffset = wep:GetMountOffset(slots[slotName])
-            else
-                ent:SetPos(vector_origin)
-                ent:SetAngles(angle_zero)
-                ent:SetParent(gun)
-                ent:AddEffects(EF_BONEMERGE)
-            end
-            preview.atts[slotName .. "#mount"] = ent
+        if not IsValid(ent) then continue end
+
+        ent:SetNoDraw(true)
+        if mount.Rail then
+            ent.SandSwepOffset = wep:GetMountOffset(slots[slotName])
+        else
+            ent:SetPos(vector_origin)
+            ent:SetAngles(angle_zero)
+            ent:SetParent(gun)
+            ent:AddEffects(EF_BONEMERGE)
         end
+        preview.atts[slotName .. "#mount"] = ent
     end
 
     for slotName, id, def in wep:IterAttachments() do
-        if def.Model then
-            local ent = ClientsideModel(def.Model, RENDERGROUP_OPAQUE)
-            if IsValid(ent) then
-                ent:SetNoDraw(true)
-                ent.SandSwepDef = def
-                ent.SandSwepOffset = wep.GetAttachmentOffset and wep:GetAttachmentOffset(slotName, id, def)
-                if wep.GetAttachmentSkin then ent:SetSkin(wep:GetAttachmentSkin(slotName, def)) end
-                SandSwep.ApplyAttScale(ent, def)
+        if not def.Model then continue end
 
-                if not ent.SandSwepOffset then
-                    ent:SetPos(vector_origin)
-                    ent:SetAngles(angle_zero)
-                    ent:SetParent(gun)
-                    ent:AddEffects(EF_BONEMERGE)
-                end
+        local ent = ClientsideModel(def.Model, RENDERGROUP_OPAQUE)
+        if not IsValid(ent) then continue end
 
-                if def.FlipSequence then
-                    local flipSeq = ent:LookupSequence(def.FlipSequence)
-                    if flipSeq and flipSeq >= 0 then
-                        ent:ResetSequence(flipSeq)
-                        ent:SetPlaybackRate(0)
-                        ent:SetCycle(wep.GetSightFlip and wep:GetSightFlip(slotName, def.FlipTime) or 0)
-                    end
-                end
+        ent:SetNoDraw(true)
+        ent.SandSwepDef = def
+        ent.SandSwepOffset = wep.GetAttachmentOffset and wep:GetAttachmentOffset(slotName, id, def)
+        if wep.GetAttachmentSkin then ent:SetSkin(wep:GetAttachmentSkin(slotName, def)) end
+        SandSwep.ApplyAttScale(ent, def)
 
-                preview.atts[slotName] = ent
+        if not ent.SandSwepOffset then
+            ent:SetPos(vector_origin)
+            ent:SetAngles(angle_zero)
+            ent:SetParent(gun)
+            ent:AddEffects(EF_BONEMERGE)
+        end
+
+        if def.FlipSequence then
+            local flipSeq = ent:LookupSequence(def.FlipSequence)
+            if flipSeq and flipSeq >= 0 then
+                ent:ResetSequence(flipSeq)
+                ent:SetPlaybackRate(0)
+                ent:SetCycle(wep.GetSightFlip and wep:GetSightFlip(slotName, def.FlipTime) or 0)
             end
         end
+
+        preview.atts[slotName] = ent
     end
 end
 

@@ -232,29 +232,31 @@ hook.Add("Think", "SandSwep_MagDropProps", function()
         local ent = mag.ent
         if not IsValid(ent) then
             table.remove(mags, i)
-        else
-            local age = now - mag.born
-            if age > life + FADE then
-                RemoveMag(i)
-            else
-                if age > life then
-                    ent:SetRenderMode(RENDERMODE_TRANSCOLOR)
-                    ent:SetColor(Color(255, 255, 255, 255 * (1 - (age - life) / FADE)))
-                end
-
-                local phys = ent:GetPhysicsObject()
-                if IsValid(phys) and mag.hits < 4 then
-                    local vel = phys:GetVelocity()
-                    local impact = (vel - mag.lastVel):Length()
-                    if impact > 70 and now >= mag.nextSound then
-                        ImpactSound(mag, impact)
-                        mag.hits = mag.hits + 1
-                        mag.nextSound = now + 0.12
-                    end
-                    mag.lastVel = vel
-                end
-            end
+            continue
         end
+
+        local age = now - mag.born
+        if age > life + FADE then
+            RemoveMag(i)
+            continue
+        end
+
+        if age > life then
+            ent:SetRenderMode(RENDERMODE_TRANSCOLOR)
+            ent:SetColor(Color(255, 255, 255, 255 * (1 - (age - life) / FADE)))
+        end
+
+        local phys = ent:GetPhysicsObject()
+        if not IsValid(phys) or mag.hits >= 4 then continue end
+
+        local vel = phys:GetVelocity()
+        local impact = (vel - mag.lastVel):Length()
+        if impact > 70 and now >= mag.nextSound then
+            ImpactSound(mag, impact)
+            mag.hits = mag.hits + 1
+            mag.nextSound = now + 0.12
+        end
+        mag.lastVel = vel
     end
 end)
 
@@ -309,30 +311,29 @@ hook.Add("Think", "SandSwep_MagDropOthers", function()
 
     for _, ply in ipairs(holders) do
         local wep = wepOf[ply]
-        if not wep:IsDormant()
-            and (ply ~= localPly or ply:ShouldDrawLocalPlayer())
-            and wep:IsReloading() and wep:GetReloadState() == RELOAD_QUICK then
-            local key = wep:GetActionStart()
-            if wep._magDropKey ~= key then
-                local entry = wep:GetCurrentReloadEntry()
-                local dropAt = (istable(entry) and entry.MagOut or 0.5) + 0.25
-                if wep:GetReloadAnimTime() >= dropAt then
-                    wep._magDropKey = key
+        if wep:IsDormant() or not wep:IsReloading() or wep:GetReloadState() ~= RELOAD_QUICK then continue end
+        if ply == localPly and not ply:ShouldDrawLocalPlayer() then continue end
 
-                    local model, snd = SandSwep.MagPropFor(wep)
-                    if model then
-                        local hand = ply:LookupBone("ValveBiped.Bip01_L_Hand")
-                        local pos = hand and ply:GetBonePosition(hand) or (ply:GetPos() + Vector(0, 0, 40))
-                        local ang = Angle(math.Rand(-30, 30), ply:EyeAngles().y + math.Rand(-60, 60), math.Rand(-30, 30))
+        local key = wep:GetActionStart()
+        if wep._magDropKey == key then continue end
 
-                        local vel = ply:GetVelocity() + Vector(0, 0, -40)
-                        local spin = VectorRand() * 250
-                        local rounds = ply == localPly and SandSwep.MagPropRounds(wep) or nil
-                        SandSwep.SpawnMagProp(model, snd, pos, ang, vel, spin, rounds)
-                    end
-                end
-            end
-        end
+        local entry = wep:GetCurrentReloadEntry()
+        local dropAt = (istable(entry) and entry.MagOut or 0.5) + 0.25
+        if wep:GetReloadAnimTime() < dropAt then continue end
+
+        wep._magDropKey = key
+
+        local model, snd = SandSwep.MagPropFor(wep)
+        if not model then continue end
+
+        local hand = ply:LookupBone("ValveBiped.Bip01_L_Hand")
+        local pos = hand and ply:GetBonePosition(hand) or (ply:GetPos() + Vector(0, 0, 40))
+        local ang = Angle(math.Rand(-30, 30), ply:EyeAngles().y + math.Rand(-60, 60), math.Rand(-30, 30))
+
+        local vel = ply:GetVelocity() + Vector(0, 0, -40)
+        local spin = VectorRand() * 250
+        local rounds = ply == localPly and SandSwep.MagPropRounds(wep) or nil
+        SandSwep.SpawnMagProp(model, snd, pos, ang, vel, spin, rounds)
     end
 end)
 

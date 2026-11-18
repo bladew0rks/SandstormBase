@@ -287,22 +287,23 @@ function SWEP:DoMeleeHit()
     if snd then sound.Play(snd, tr.HitPos, 75, math.random(95, 105), 1) end
     owner:ViewPunch(Angle(1.5, math.Rand(-1, 1), 0))
 
-    if IsValid(ent) then
-        local dmg = DamageInfo()
-        dmg:SetDamage(self.MeleeDamage)
-        dmg:SetDamageType(DMG_CLUB)
-        dmg:SetAttacker(owner)
-        dmg:SetInflictor(self)
-        dmg:SetDamagePosition(tr.HitPos)
-        dmg:SetDamageForce(dir * self.MeleeForce)
-        ent:TakeDamageInfo(dmg)
+    if not IsValid(ent) then
+        if tr.HitWorld then util.Decal("Impact.Concrete", tr.HitPos + tr.HitNormal, tr.HitPos - tr.HitNormal, owner) end
+        return
+    end
 
-        local phys = ent:GetPhysicsObject()
-        if IsValid(phys) and not ent:IsPlayer() and not ent:IsNPC() then
-            phys:ApplyForceOffset(dir * self.MeleeForce * 0.5, tr.HitPos)
-        end
-    elseif tr.HitWorld then
-        util.Decal("Impact.Concrete", tr.HitPos + tr.HitNormal, tr.HitPos - tr.HitNormal, owner)
+    local dmg = DamageInfo()
+    dmg:SetDamage(self.MeleeDamage)
+    dmg:SetDamageType(DMG_CLUB)
+    dmg:SetAttacker(owner)
+    dmg:SetInflictor(self)
+    dmg:SetDamagePosition(tr.HitPos)
+    dmg:SetDamageForce(dir * self.MeleeForce)
+    ent:TakeDamageInfo(dmg)
+
+    local phys = ent:GetPhysicsObject()
+    if IsValid(phys) and not ent:IsPlayer() and not ent:IsNPC() then
+        phys:ApplyForceOffset(dir * self.MeleeForce * 0.5, tr.HitPos)
     end
 end
 

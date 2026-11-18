@@ -624,49 +624,49 @@ function SWEP:GetSights()
 
     local list = {}
     for slotName, id, def, slot in self:IterAttachments() do
-        if def.Sights then
-            local overrides = slot.Overrides
-            local pose = def.SightPose and slot.SightPoses and slot.SightPoses[def.SightPose]
-            local poseFamily = pose and POSE_FAMILIES[def.SightPose]
-            if not pose and def.SightOffset and slot.SightPoses and slot.SightPoses.eotech then
-                pose = slot.SightPoses.eotech + def.SightOffset
-                poseFamily = true
+        if not def.Sights then continue end
+
+        local overrides = slot.Overrides
+        local pose = def.SightPose and slot.SightPoses and slot.SightPoses[def.SightPose]
+        local poseFamily = pose and POSE_FAMILIES[def.SightPose]
+        if not pose and def.SightOffset and slot.SightPoses and slot.SightPoses.eotech then
+            pose = slot.SightPoses.eotech + def.SightOffset
+            poseFamily = true
+        end
+
+        for _, sight in ipairs(def.Sights) do
+            local entry = table.Copy(sight)
+            local override = overrides and (overrides[id .. ":" .. (sight.Name or "")] or overrides[id])
+
+            local ownPose = sight.SightPose and slot.SightPoses and slot.SightPoses[sight.SightPose]
+            local ownFamily = ownPose and POSE_FAMILIES[sight.SightPose]
+            if not ownPose and sight.SightOffset and slot.SightPoses and slot.SightPoses.eotech then
+                ownPose = slot.SightPoses.eotech + sight.SightOffset
+                ownFamily = true
             end
 
-            for _, sight in ipairs(def.Sights) do
-                local entry = table.Copy(sight)
-                local override = overrides and (overrides[id .. ":" .. (sight.Name or "")] or overrides[id])
-
-                local ownPose = sight.SightPose and slot.SightPoses and slot.SightPoses[sight.SightPose]
-                local ownFamily = ownPose and POSE_FAMILIES[sight.SightPose]
-                if not ownPose and sight.SightOffset and slot.SightPoses and slot.SightPoses.eotech then
-                    ownPose = slot.SightPoses.eotech + sight.SightOffset
-                    ownFamily = true
-                end
-
-                if override and override.Pos then
-                    entry.Pos = override.Pos
-                elseif ownPose then
-                    entry.Pos = LensAlignedPos(ownPose, sight, slot, ownFamily)
-                elseif pose then
-                    entry.Pos = LensAlignedPos(pose, sight, slot, poseFamily)
-                else
-                    entry.Pos = sight.Pos or Vector(0, 0, 0)
-                end
-
-                local shift = slot.SightShift and slot.SightShift[id]
-                if shift and not (override and override.Pos) then entry.Pos = entry.Pos + shift end
-
-                if override and override.Ang then
-                    entry.Ang = override.Ang
-                else
-                    entry.Ang = (sight.Ang or Angle(0, 0, 0)) + (slot.SightAng or Angle(0, 0, 0))
-                end
-
-                entry.AttSlot = slotName
-                entry.AttId = id
-                list[#list + 1] = entry
+            if override and override.Pos then
+                entry.Pos = override.Pos
+            elseif ownPose then
+                entry.Pos = LensAlignedPos(ownPose, sight, slot, ownFamily)
+            elseif pose then
+                entry.Pos = LensAlignedPos(pose, sight, slot, poseFamily)
+            else
+                entry.Pos = sight.Pos or Vector(0, 0, 0)
             end
+
+            local shift = slot.SightShift and slot.SightShift[id]
+            if shift and not (override and override.Pos) then entry.Pos = entry.Pos + shift end
+
+            if override and override.Ang then
+                entry.Ang = override.Ang
+            else
+                entry.Ang = (sight.Ang or Angle(0, 0, 0)) + (slot.SightAng or Angle(0, 0, 0))
+            end
+
+            entry.AttSlot = slotName
+            entry.AttId = id
+            list[#list + 1] = entry
         end
     end
 

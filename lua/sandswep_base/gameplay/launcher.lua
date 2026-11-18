@@ -107,25 +107,25 @@ function SWEP:FireGL()
         return
     end
 
-    if SERVER then
-        local dir = self:GetAimDirection()
-        local start = owner:GetShootPos()
-        local spawnPos = start + dir * 18 - owner:EyeAngles():Up() * 3 + owner:EyeAngles():Right() * 2
-        local tr = SandSwep.TraceLine(start, spawnPos, owner, MASK_SHOT)
+    if not SERVER then return end
 
-        local nade = ents.Create("sandswep_40mm")
-        if IsValid(nade) then
-            nade:SetPos(tr.Hit and (tr.HitPos - dir * 2) or spawnPos)
-            nade:SetAngles(dir:Angle())
-            nade:SetOwner(owner)
-            nade.Attacker = owner
-            nade.Damage, nade.Radius = cfg.Damage, cfg.Radius
-            nade.ArmDistance, nade.DudDamage = cfg.ArmDistance, cfg.DudDamage
-            nade:Spawn()
-            nade.StartPos = owner:GetShootPos()      -- arming distance counts from the shooter
-            nade:Launch(dir * cfg.Velocity + owner:GetVelocity() * 0.5)
-        end
-    end
+    local dir = self:GetAimDirection()
+    local start = owner:GetShootPos()
+    local spawnPos = start + dir * 18 - owner:EyeAngles():Up() * 3 + owner:EyeAngles():Right() * 2
+    local tr = SandSwep.TraceLine(start, spawnPos, owner, MASK_SHOT)
+
+    local nade = ents.Create("sandswep_40mm")
+    if not IsValid(nade) then return end
+
+    nade:SetPos(tr.Hit and (tr.HitPos - dir * 2) or spawnPos)
+    nade:SetAngles(dir:Angle())
+    nade:SetOwner(owner)
+    nade.Attacker = owner
+    nade.Damage, nade.Radius = cfg.Damage, cfg.Radius
+    nade.ArmDistance, nade.DudDamage = cfg.ArmDistance, cfg.DudDamage
+    nade:Spawn()
+    nade.StartPos = owner:GetShootPos()      -- arming distance counts from the shooter
+    nade:Launch(dir * cfg.Velocity + owner:GetVelocity() * 0.5)
 end
 
 function SWEP:StartGLReload()

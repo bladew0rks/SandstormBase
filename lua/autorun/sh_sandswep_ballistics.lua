@@ -1139,46 +1139,46 @@ hook.Add("PostDrawTranslucentRenderables", "SandSwep_BallisticsTracers", functio
     local lights = 0
     for i = 1, #visuals do
         local v = visuals[i]
-        if v.Tracer then
-            local head = v.Pos
-            local tail = TracerTail(v, tailPos)
-            local heat, thin = Burn(v)
-            local dist = head:Distance(eye)
-            local width = Width(dist, pixel) * thin
-            local alpha = math.max(v.Fade, 0) * heat
-            local f = dist > farDraw and farDraw / dist or 1
-            local visible = InFront(head, eye, fwd) or InFront(tail, eye, fwd)
-            local realHead = head
-            if f < 1 then
-                visible = visible and Unblocked(eye, realHead)
-                head = PullIn(head, eye, f, nearHead)
-                tail = PullIn(tail, eye, f, nearTail)
-                width = width * f
-                dist = farDraw
-            end
+        if not v.Tracer then continue end
 
-            if visible then
-                DrawTracer(head, tail, width, alpha)
-
-                if smear then SmearStrip(realHead, width, alpha, now, eye, f) end
-
-                render.SetMaterial(glowMat)
-                CORE.a = 200 * alpha
-                render.DrawSprite(head, width * 3, width * 3, CORE)
-            end
-
-            if not pip and lights < MAX_LIGHTS and not v.Stopped and not v.Sky and dist < 2000 then
-                lights = lights + 1
-                local light = DynamicLight(0x5A000 + i)
-                if light then
-                    light.pos = head
-                    light.r, light.g, light.b = 255, 50, 25
-                    light.brightness = 0.6 * heat
-                    light.size = 96
-                    light.decay = 2000
-                    light.dietime = CurTime() + 0.05
-                end
-            end
+        local head = v.Pos
+        local tail = TracerTail(v, tailPos)
+        local heat, thin = Burn(v)
+        local dist = head:Distance(eye)
+        local width = Width(dist, pixel) * thin
+        local alpha = math.max(v.Fade, 0) * heat
+        local f = dist > farDraw and farDraw / dist or 1
+        local visible = InFront(head, eye, fwd) or InFront(tail, eye, fwd)
+        local realHead = head
+        if f < 1 then
+            visible = visible and Unblocked(eye, realHead)
+            head = PullIn(head, eye, f, nearHead)
+            tail = PullIn(tail, eye, f, nearTail)
+            width = width * f
+            dist = farDraw
         end
+
+        if visible then
+            DrawTracer(head, tail, width, alpha)
+
+            if smear then SmearStrip(realHead, width, alpha, now, eye, f) end
+
+            render.SetMaterial(glowMat)
+            CORE.a = 200 * alpha
+            render.DrawSprite(head, width * 3, width * 3, CORE)
+        end
+
+        if pip or lights >= MAX_LIGHTS or v.Stopped or v.Sky or dist >= 2000 then continue end
+
+        lights = lights + 1
+        local light = DynamicLight(0x5A000 + i)
+        if not light then continue end
+
+        light.pos = head
+        light.r, light.g, light.b = 255, 50, 25
+        light.brightness = 0.6 * heat
+        light.size = 96
+        light.decay = 2000
+        light.dietime = CurTime() + 0.05
     end
 end)

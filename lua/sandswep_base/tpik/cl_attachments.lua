@@ -42,11 +42,11 @@ local function build(wep, tpik, state)
         local mount = slots[slotName] and slots[slotName].Mount
         local ent = mount and mount.Model and newModel(mount.Model)
 
-        if ent then
-            ent.SandTPIK_Slot = slotName
-            ent.SandTPIK_Offset = wep:GetMountOffset(slots[slotName])
-            ents[slotName .. "#mount"] = ent
-        end
+        if not ent then continue end
+
+        ent.SandTPIK_Slot = slotName
+        ent.SandTPIK_Offset = wep:GetMountOffset(slots[slotName])
+        ents[slotName .. "#mount"] = ent
     end
 
     for slotName, id, def in wep:IterAttachments() do
@@ -127,47 +127,48 @@ function SANDTPIK.DrawAttachments(wep, tpik, state, flags)
     state.attFrame = frame
 
     for _, ent in pairs(state.attEnts) do
-        if IsValid(ent) then
-            poseFlip(wep, ent, ent.SandTPIK_Def)
+        if not IsValid(ent) then continue end
 
-            local offset = ent.SandTPIK_Offset
+        poseFlip(wep, ent, ent.SandTPIK_Def)
 
-            if offset then
-                local bone = ent.SandTPIK_BoneId
-                if bone == nil then
-                    bone = boneId(tpik, offset.Bone or "") or false
-                    ent.SandTPIK_BoneId = bone
-                end
+        local offset = ent.SandTPIK_Offset
 
-                if fresh then
-                    local framePos, frameAng
-                    if offset.Attachment and SandSwep.OffsetFrame then
-                        framePos, frameAng = SandSwep.OffsetFrame(tpik, offset)
-                    else
-                        local mat = bone and tpik:GetBoneMatrix(bone)
-                        if mat then framePos, frameAng = mat:GetTranslation(), mat:GetAngles() end
-                    end
+        if not offset then
+            if fresh then
+                ent:SetRenderOrigin(tpik:GetPos())
+                ent:SetRenderAngles(tpik:GetAngles())
+                ent:SetupBones()
+            end
 
-                    ent.SandTPIK_Placed = framePos ~= nil
+            ent:DrawModel(flags)
+            continue
+        end
 
-                    if framePos then
-                        local pos, ang = LocalToWorld(offset.Pos or vector_origin, offset.Ang or angle_zero, framePos, frameAng)
-                        ent:SetPos(pos)
-                        ent:SetAngles(ang)
-                        ent:SetupBones()
-                    end
-                end
+        local bone = ent.SandTPIK_BoneId
+        if bone == nil then
+            bone = boneId(tpik, offset.Bone or "") or false
+            ent.SandTPIK_BoneId = bone
+        end
 
-                if ent.SandTPIK_Placed then ent:DrawModel(flags) end
+        if fresh then
+            local framePos, frameAng
+            if offset.Attachment and SandSwep.OffsetFrame then
+                framePos, frameAng = SandSwep.OffsetFrame(tpik, offset)
             else
-                if fresh then
-                    ent:SetRenderOrigin(tpik:GetPos())
-                    ent:SetRenderAngles(tpik:GetAngles())
-                    ent:SetupBones()
-                end
+                local mat = bone and tpik:GetBoneMatrix(bone)
+                if mat then framePos, frameAng = mat:GetTranslation(), mat:GetAngles() end
+            end
 
-                ent:DrawModel(flags)
+            ent.SandTPIK_Placed = framePos ~= nil
+
+            if framePos then
+                local pos, ang = LocalToWorld(offset.Pos or vector_origin, offset.Ang or angle_zero, framePos, frameAng)
+                ent:SetPos(pos)
+                ent:SetAngles(ang)
+                ent:SetupBones()
             end
         end
+
+        if ent.SandTPIK_Placed then ent:DrawModel(flags) end
     end
 end

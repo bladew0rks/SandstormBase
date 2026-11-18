@@ -114,42 +114,42 @@ function SWEP:UpdateVMAttachmentModels(vm)
         if mount and mount.Except and mount.Except[id] then mount = nil end
 
         local ent = mount and ClientsideModel(mount.Model, RENDERGROUP_VIEWMODEL)
-        if IsValid(ent) then
-            SetupLighting(ent, lit)
-            ent.SandSwepSlot = slotName
+        if not IsValid(ent) then continue end
 
-            if mount.Rail then
-                ent.SandSwepOffset = self:GetMountOffset(slots[slotName])
-            else
-                ent:SetPos(vm:GetPos())
-                ent:SetAngles(vm:GetAngles())
-                ent:SetParent(vm)
-                ent:AddEffects(EF_BONEMERGE)
-            end
+        SetupLighting(ent, lit)
+        ent.SandSwepSlot = slotName
 
-            self._vmAttEnts[slotName .. "#mount"] = ent
+        if mount.Rail then
+            ent.SandSwepOffset = self:GetMountOffset(slots[slotName])
+        else
+            ent:SetPos(vm:GetPos())
+            ent:SetAngles(vm:GetAngles())
+            ent:SetParent(vm)
+            ent:AddEffects(EF_BONEMERGE)
         end
+
+        self._vmAttEnts[slotName .. "#mount"] = ent
     end
 
     for slotName, id, def in self:IterAttachments() do
         local ent = def.Model and ClientsideModel(def.Model, RENDERGROUP_VIEWMODEL)
-        if IsValid(ent) then
-            SetupLighting(ent, lit)
-            ent.SandSwepDef = def
-            ent.SandSwepSlot = slotName
-            ent.SandSwepOffset = self:GetAttachmentOffset(slotName, id, def)
-            ent:SetSkin(self:GetAttachmentSkin(slotName, def))
-            SandSwep.ApplyAttScale(ent, def)
+        if not IsValid(ent) then continue end
 
-            if not ent.SandSwepOffset then
-                ent:SetPos(vm:GetPos())
-                ent:SetAngles(vm:GetAngles())
-                ent:SetParent(vm)
-                ent:AddEffects(EF_BONEMERGE)
-            end
+        SetupLighting(ent, lit)
+        ent.SandSwepDef = def
+        ent.SandSwepSlot = slotName
+        ent.SandSwepOffset = self:GetAttachmentOffset(slotName, id, def)
+        ent:SetSkin(self:GetAttachmentSkin(slotName, def))
+        SandSwep.ApplyAttScale(ent, def)
 
-            self._vmAttEnts[slotName] = ent
+        if not ent.SandSwepOffset then
+            ent:SetPos(vm:GetPos())
+            ent:SetAngles(vm:GetAngles())
+            ent:SetParent(vm)
+            ent:AddEffects(EF_BONEMERGE)
         end
+
+        self._vmAttEnts[slotName] = ent
     end
 
     self._vmAttKey = {
@@ -199,20 +199,20 @@ end
 
 function SWEP:DrawVMAttachments(vm, active, aimT)
     for _, ent in pairs(self._vmAttEnts or {}) do
-        if IsValid(ent) then
-            if active and active.Squash and active.AttSlot == ent.SandSwepSlot then
-                self:SquashOptic(ent, active, Lerp(aimT, 1, active.Squash))
-            elseif ent.SandSwepSquash then
-                ent.SandSwepSquash.s = 1
-            end
+        if not IsValid(ent) then continue end
 
-            PoseFlip(self, ent, ent.SandSwepDef)
+        if active and active.Squash and active.AttSlot == ent.SandSwepSlot then
+            self:SquashOptic(ent, active, Lerp(aimT, 1, active.Squash))
+        elseif ent.SandSwepSquash then
+            ent.SandSwepSquash.s = 1
+        end
 
-            if ent.SandSwepOffset then
-                if PlaceOffset(ent, vm, ent.SandSwepOffset) then ent:DrawModel() end
-            else
-                ent:DrawModel()
-            end
+        PoseFlip(self, ent, ent.SandSwepDef)
+
+        if ent.SandSwepOffset then
+            if PlaceOffset(ent, vm, ent.SandSwepOffset) then ent:DrawModel() end
+        else
+            ent:DrawModel()
         end
     end
 end

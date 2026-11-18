@@ -1210,7 +1210,14 @@ local function PullIn(pos, eye, f, out)
     return out
 end
 
-local function SmearStrip(head, width, alpha, now, eye, f)
+local function ToSky(pos, origin, scale, out)
+    out:Set(pos)
+    out:Div(scale)
+    out:Add(origin)
+    return out
+end
+
+local function SmearStrip(head, width, alpha, now, eye, f, skyOrigin, skyScale)
     local n = SmearFrames(now)
     if n < 2 then return end
 
@@ -1222,6 +1229,7 @@ local function SmearStrip(head, width, alpha, now, eye, f)
         end
         pt:Set(smearMats[k] * head)
         if f < 1 then PullIn(pt, eye, f, pt) end
+        if skyOrigin then ToSky(pt, skyOrigin, skyScale, pt) end
     end
     if stripPts[1]:DistToSqr(stripPts[n]) < width * width then return end
 
@@ -1265,13 +1273,6 @@ end
 local skyFrame = -1
 local skyHead, skyTail = Vector(), Vector()
 
-local function ToSky(pos, origin, scale, out)
-    out:Set(pos)
-    out:Div(scale)
-    out:Add(origin)
-    return out
-end
-
 hook.Add("PostDrawTranslucentRenderables", "SandSwep_BallisticsSkyTracers", function(depth, sky, sky3d)
     if depth or not sky or sky3d == false then return end
 
@@ -1282,6 +1283,7 @@ hook.Add("PostDrawTranslucentRenderables", "SandSwep_BallisticsSkyTracers", func
     local origin = EyePos() - viewPos / scale
     local setup = render.GetViewSetup and render.GetViewSetup()
     local pixel = 2 * math.tan(math.rad((setup and setup.fov or 90) * 0.5)) / math.max(ScrH(), 1)
+    local now = RealTime()
 
     for i = 1, #visuals do
         local v = visuals[i]
@@ -1294,6 +1296,7 @@ hook.Add("PostDrawTranslucentRenderables", "SandSwep_BallisticsSkyTracers", func
         ToSky(v.Pos, origin, scale, skyHead)
         ToSky(TracerTail(v, tailPos), origin, scale, skyTail)
         DrawTracer(skyHead, skyTail, width, alpha)
+        SmearStrip(v.Pos, width, alpha, now, viewPos, 1, origin, scale)
 
         render.SetMaterial(glowMat)
         CORE.a = 200 * alpha

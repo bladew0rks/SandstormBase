@@ -280,6 +280,12 @@ function SWEP:HasFlashHider()
     return cache.fh
 end
 
+local SUPPRESSED_LEVEL_DROP = 20
+
+local function SuppressedLevel(level)
+    return (level or 75) - SUPPRESSED_LEVEL_DROP
+end
+
 local function IsRawSound(snd)
     return isstring(snd) and (snd:find("%.wav$") or snd:find("%.mp3$") or snd:find("%.ogg$")) ~= nil
 end
@@ -298,7 +304,7 @@ function SWEP:PlaySuppressedFireSounds()
     end
 
     if close then
-        self:EmitShotLayer(close, sounds.CloseSuppressedLevel or sounds.CloseLevel, sounds.ClosePitch, sounds.CloseSuppressedVolume,
+        self:EmitShotLayer(close, sounds.CloseSuppressedLevel or SuppressedLevel(sounds.CloseLevel), sounds.ClosePitch, sounds.CloseSuppressedVolume,
             self:NextShotChannel(), key)
     else
         close = self:PickSound(self:GetFireSound("Close"), "Close")
@@ -370,16 +376,18 @@ function SWEP:UpdateShotTail()
     while queue[1] and CurTime() >= queue[1] do table.remove(queue, 1) end    -- only the newest due one matters
 
     local fs = self.FireSounds
+    local level = fs.ShotTailLevel or fs.CloseLevel
     local snd, vol
     if self:IsSuppressed() then
         snd, vol = fs.ShotTailSuppressed, fs.ShotTailSuppressedVolume
+        level = SuppressedLevel(level)
     elseif fs.ShotTailIndoor and self:IsIndoors() then
         snd, vol = fs.ShotTailIndoor, fs.ShotTailIndoorVolume
     else
         snd = fs.ShotTail
     end
 
-    self:EmitShotLayer(snd, fs.ShotTailLevel or fs.CloseLevel, fs.ShotTailPitch, vol or fs.ShotTailVolume, CHAN_SHOTTAIL, "ShotTail")
+    self:EmitShotLayer(snd, level, fs.ShotTailPitch, vol or fs.ShotTailVolume, CHAN_SHOTTAIL, "ShotTail")
 end
 
 function SWEP:ArmBurstTail(interval)
@@ -404,9 +412,11 @@ function SWEP:UpdateBurstTail()
     if CLIENT and not IsFirstTimePredicted() then return end
 
     local fs = self.FireSounds
+    local level = fs.BurstTailLevel or fs.CloseLevel
     local snd, vol
     if self:IsSuppressed() then
         snd, vol = fs.BurstTailSuppressed, fs.BurstTailSuppressedVolume
+        level = SuppressedLevel(level)
     elseif fs.BurstTailIndoor and self:IsIndoors() then
         snd, vol = fs.BurstTailIndoor, fs.BurstTailIndoorVolume
     else
@@ -419,7 +429,7 @@ function SWEP:UpdateBurstTail()
         if i and snd[i] then snd, pitch = snd[i], self._lastShotPitch or pitch end
     end
 
-    self:EmitShotLayer(snd, fs.BurstTailLevel or fs.CloseLevel, pitch, vol or fs.BurstTailVolume, nil, "BurstTail")
+    self:EmitShotLayer(snd, level, pitch, vol or fs.BurstTailVolume, nil, "BurstTail")
 end
 
 function SWEP:PlayFireSounds(clipAfter)

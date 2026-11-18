@@ -369,13 +369,6 @@ concommand.Add("sandswep_handeditor", function()
     Field("Fade: full within", "LeftHandFadeFull", 0, 4, 2, FULL)
     Field("Fade: off past", "LeftHandFadeNone", 0.1, 8, 2, NONE)
 
-    local blendTime = GetConVar("cl_sandswep_grip_blend_time")
-    if blendTime then
-        Slider("Grip blend time (s)", 0.01, 1, 2, blendTime:GetFloat(), function(v)
-            RunConsoleCommand("cl_sandswep_grip_blend_time", string.format("%.2f", v))
-        end)
-    end
-
     local combo = left:Add("DComboBox")
     combo:Dock(TOP)
     combo:DockMargin(0, 6, 0, 2)

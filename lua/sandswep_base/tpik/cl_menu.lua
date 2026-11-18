@@ -24,13 +24,11 @@ hook.Add("PopulateToolMenu", "SandTPIK.Settings", function()
         ResetButton(panel, "Reset", { "sandswep_tpik", "sandswep_tpik_others", "sandswep_tpik_effects" })
 
         panel:Help("Performance")
-        panel:NumSlider("Arm IK rate (you)", "sandswep_tpik_rate_local", 5, 150, 0)
-        panel:NumSlider("Arm IK rate (others)", "sandswep_tpik_rate_others", 5, 150, 0)
         panel:NumSlider("Draw distance (others)", "sandswep_tpik_distance", 0, 8192, 0)
         panel:NumSlider("Reduced IK rate past", "sandswep_tpik_lod_distance", 0, 4096, 0)
         panel:NumSlider("Half detail gun past", "sandswep_tpik_mesh_lod1", 0, 4096, 0)
         panel:NumSlider("Low detail gun past", "sandswep_tpik_mesh_lod2", 0, 4096, 0)
-        ResetButton(panel, "Reset performance", { "sandswep_tpik_rate_local", "sandswep_tpik_rate_others",
-            "sandswep_tpik_distance", "sandswep_tpik_lod_distance", "sandswep_tpik_mesh_lod1", "sandswep_tpik_mesh_lod2" })
+        ResetButton(panel, "Reset performance", { "sandswep_tpik_distance", "sandswep_tpik_lod_distance",
+            "sandswep_tpik_mesh_lod1", "sandswep_tpik_mesh_lod2" })
     end)
 end)

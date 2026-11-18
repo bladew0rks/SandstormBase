@@ -1,8 +1,5 @@
 if not CLIENT then return end
 
-local cvFocusVig = CreateClientConVar("cl_sandswep_focus_vignette", "1", true, false, "Hold breath vignette", 0, 2)
-local cvVignette = CreateClientConVar("cl_sandswep_scope_vignette", "1", true, false, "Scope vignette", 0, 2)
-local cvPIPBright = CreateClientConVar("cl_sandswep_scope_brightness", "1", true, false, "Scope brightness", 0.2, 1.5)
 local cvPIPRes = CreateClientConVar("cl_sandswep_scope_resolution", "0.75", true, false, "Scope resolution (fraction of screen height)", 0.25, 1)
 local STABLE_OVERSCAN = 1.5
 
@@ -78,7 +75,7 @@ hook.Add("RenderScreenspaceEffects", "SandSwep_FocusVignette", function()
     local wep = ply:GetActiveWeapon()
     if not IsValid(wep) or not wep.IsSandSwep or not wep.GetFocusProgress then return end
 
-    local strength = wep:GetFocusProgress() * (wep.FocusVignette or 0) * cvFocusVig:GetFloat()
+    local strength = wep:GetFocusProgress() * (wep.FocusVignette or 0)
     if strength <= 0.004 then return end
 
     cam.Start2D()
@@ -364,7 +361,7 @@ local function DrawPIPImage(wep, sight, lens, lensPos, aimT)
         end
 
         render.SetMaterial(pipMat)
-        local bright = math.Clamp((sight.PIP.Brightness or 1) * cvPIPBright:GetFloat(), 0, 1) * 255
+        local bright = math.Clamp(sight.PIP.Brightness or 1, 0, 1) * 255
         local right, up = view:Right(), view:Up()
         local shutter, dir = wep:GetSightShutter(sight)
 
@@ -409,7 +406,7 @@ local function DrawLensVignette(sight, lens, lensPos, pipVisible)
     if strength == nil then
         strength = (sight.PIP or (reticle and reticle.FillLens)) and 1 or 0
     end
-    strength = strength * cvVignette:GetFloat() * (sight.PIP and pipVisible or 1)
+    strength = strength * (sight.PIP and pipVisible or 1)
     if strength <= 0 or not lens.Radius then return end
 
     render.SetMaterial(matVignette)

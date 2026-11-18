@@ -2,7 +2,7 @@ local VisualFrameTime = SandSwep.VisualFrameTime
 
 if not CLIENT then return end
 
-local cvHandScale = CreateClientConVar("cl_sandswep_handscale", "0.86", true, false, "Hand size on Sandstorm viewmodels", 0.7, 1.1)
+local HAND_SCALE = 0.86
 
 local ONE = Vector(1, 1, 1)
 local ZERO = Vector(0, 0, 0)
@@ -126,7 +126,7 @@ function SWEP:ApplyHandScale(vm)
 
     local rest = SandSwep.AnimatedHands and SandSwep.AnimatedHands()
     local left, right = math.Round(rest and rest.L or 1, 3), math.Round(rest and rest.R or 1, 3)
-    local scale = cvHandScale:GetFloat() * (self.HandScaleMul or 1)
+    local scale = HAND_SCALE * (self.HandScaleMul or 1)
     local model = vm:GetModel()
 
     local cur = vm.SandSwepHandScale

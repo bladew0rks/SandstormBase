@@ -78,7 +78,6 @@ SandSwep.LightDefaults = {
     FOV = 77.5, FarZ = 1174, Brightness = 7.5,
     Color = Color(217, 229, 255), Shadows = true,
 }
-local cvLightBright  = CreateClientConVar("cl_sandswep_light_brightness", "1", true, false, "Weapon light brightness multiplier", 0, 10)
 local cvLightShadows = CreateClientConVar("cl_sandswep_light_shadows", "1", true, false, "Weapon lights cast shadows", 0, 1)
 local function LightConfig(def)
     local defaults = SandSwep.LightDefaults
@@ -88,7 +87,7 @@ local function LightConfig(def)
         Texture = def.LightTexture or defaults.Texture,
         FOV = def.LightFOV or defaults.FOV,
         FarZ = def.LightFarZ or defaults.FarZ,
-        Brightness = (def.LightBrightness or defaults.Brightness) * cvLightBright:GetFloat(),
+        Brightness = def.LightBrightness or defaults.Brightness,
         Color = def.LightColor or defaults.Color,
         Shadows = (def.LightShadows ~= nil and def.LightShadows or defaults.Shadows) and cvLightShadows:GetBool(),
     }
@@ -117,10 +116,10 @@ hook.Add("Think", "SandSwep_Lights", function()
             lightKeys[ply] = nil
         end
 
-        local bright, shadows = cvLightBright:GetFloat(), cvLightShadows:GetBool()
+        local shadows = cvLightShadows:GetBool()
         local key = lightKeys[ply]
-        if not key or key[1] ~= def or key[2] ~= bright or key[3] ~= shadows then
-            lightKeys[ply] = { def, bright, shadows }
+        if not key or key[1] ~= def or key[2] ~= shadows then
+            lightKeys[ply] = { def, shadows }
             local cfg = LightConfig(def)
             light:SetTexture(cfg.Texture)
             light:SetFarZ(cfg.FarZ)

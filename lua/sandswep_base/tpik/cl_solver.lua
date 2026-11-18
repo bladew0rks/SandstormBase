@@ -76,12 +76,9 @@ local function readConvars()
     cfg.enabled = cv.Enabled:GetBool()
     cfg.others = cv.Others:GetBool()
     cfg.distance = cv.DistanceOthers:GetFloat()
-    cfg.rateLocal = mathClamp(cv.RateLocal:GetInt(), 5, 150)
-    cfg.rateOthers = mathClamp(cv.RateOthers:GetInt(), 5, 150)
     cfg.lod = cv.LodDistance:GetFloat()
     cfg.mesh1 = cv.MeshLod1:GetFloat()
     cfg.mesh2 = cv.MeshLod2:GetFloat()
-    cfg.poleSolver = cv.Solver:GetInt() == 1
 end
 
 readConvars()
@@ -175,42 +172,6 @@ local function applyBoneMatrix(ent, bone, newMatrix, stopBone)
     end
 
     entitySetBoneMatrix(ent, bone, newMatrix)
-end
-
-local function tweenAlpha(speed)
-    return mathClamp(1 - math.exp(-mathClamp(speed * 1.5, 1, 60) * RealFrameTime()), 0, 1)
-end
-
-local function tweenVec(side, key, target, alpha)
-    if not target then return nil end
-
-    local current = side[key]
-    if not current then
-        current = Vector(target)
-        side[key] = current
-        return current
-    end
-
-    current.x = current.x + (target.x - current.x) * alpha
-    current.y = current.y + (target.y - current.y) * alpha
-    current.z = current.z + (target.z - current.z) * alpha
-
-    return current
-end
-
-local function tweenAng(side, key, target, alpha)
-    if not target then return nil end
-
-    local current = side[key]
-    if not current then
-        current = Angle(target)
-        side[key] = current
-        return current
-    end
-
-    if alpha > 0 then current:Set(LerpAngle(alpha, current, target)) end
-
-    return current
 end
 
 local function smooth(t)
@@ -795,46 +756,6 @@ local function measureLimbs(ply)
     return out
 end
 
-local function solveArm(ply, side, bones, sign, eyeAng, fullSolve, alpha, limbUpper, limbFore)
-    local upperIdx = getBone(ply, bones.UpperArm)
-    local foreIdx = getBone(ply, bones.Forearm)
-    local handIdx = getBone(ply, bones.Hand)
-    if not upperIdx or not foreIdx or not handIdx then return false end
-
-    local upperMat = entityGetBoneMatrix(ply, upperIdx)
-    local foreMat = entityGetBoneMatrix(ply, foreIdx)
-    local handMat = entityGetBoneMatrix(ply, handIdx)
-    if not upperMat or not foreMat or not handMat then return false end
-
-    local rootPos, rootAng = upperMat:GetTranslation(), upperMat:GetAngles()
-
-    if fullSolve or not side.elbowT then
-        local elbow, hand, upperAng, foreAng = SANDTPIK.Solve2PartIK(
-            rootPos, handMat:GetTranslation(), limbUpper, limbFore, sign, eyeAng)
-
-        side.elbowT, side.upperAngT = WorldToLocal(elbow, upperAng, rootPos, rootAng)
-        side.handT, side.foreAngT = WorldToLocal(hand, foreAng, rootPos, rootAng)
-    end
-
-    local localElbowPos = tweenVec(side, "elbow", side.elbowT, alpha)
-    local localUpperAng = tweenAng(side, "upperAng", side.upperAngT, alpha)
-    local localHandPos = tweenVec(side, "hand", side.handT, alpha)
-    local localForeAng = tweenAng(side, "foreAng", side.foreAngT, alpha)
-    if not localElbowPos or not localHandPos then return false end
-
-    local elbowPos, upperAng = LocalToWorld(localElbowPos, localUpperAng, rootPos, rootAng)
-    local _, foreAng = LocalToWorld(localHandPos, localForeAng, rootPos, rootAng)
-
-    upperMat:SetAngles(upperAng)
-    foreMat:SetTranslation(elbowPos)
-    foreMat:SetAngles(foreAng)
-
-    applyBoneMatrix(ply, upperIdx, upperMat, foreIdx)
-    applyBoneMatrix(ply, foreIdx, foreMat, handIdx)
-
-    return true
-end
-
 local ELBOW_OUT = 0.4
 local ELBOW_DOWN = 0.9
 local LEFT_ELBOW = Vector(0.317, 0.423, -0.849)
@@ -1137,22 +1058,9 @@ local function applyToPlayer(ply, numBones)
     data.copied = copied
     if copied == 0 then return end
 
-    local first = data.ikFrame ~= frame
-    data.ikFrame = frame
-
-    local fullSolve = first and data.fullSolve
-    local alpha = first and data.alpha or 0
-
-    if cfg.poleSolver then
-        solveArmPole(ply, state.right, SANDTPIK.ArmBones.Right, 1, state.limbUpper, state.limbFore, modelScale, data.eyeAng)
-        if not dropLeft then
-            solveArmPole(ply, state.left, SANDTPIK.ArmBones.Left, -1, state.limbUpper, state.limbFore, modelScale, data.eyeAng)
-        end
-    else
-        solveArm(ply, state.right, SANDTPIK.ArmBones.Right, -1.3, data.eyeAng, fullSolve, alpha, state.limbUpper, state.limbFore)
-        if not dropLeft then
-            solveArm(ply, state.left, SANDTPIK.ArmBones.Left, 1, data.eyeAng, fullSolve, alpha, state.limbUpper, state.limbFore)
-        end
+    solveArmPole(ply, state.right, SANDTPIK.ArmBones.Right, 1, state.limbUpper, state.limbFore, modelScale, data.eyeAng)
+    if not dropLeft then
+        solveArmPole(ply, state.left, SANDTPIK.ArmBones.Left, -1, state.limbUpper, state.limbFore, modelScale, data.eyeAng)
     end
 
     local eyeLocal = state.eyeLocal
@@ -1184,22 +1092,6 @@ local function isDetailed(ply, isLocal)
     return lod <= 0 or EyePos():DistToSqr(ply:GetPos()) <= lod * lod
 end
 
-local function solveRate(ply, isLocal)
-    if isLocal then return cfg.rateLocal end
-
-    local rate = cfg.rateOthers
-    local lod = cfg.lod
-
-    if lod > 0 then
-        local distSqr = EyePos():DistToSqr(ply:GetPos())
-        if distSqr > lod * lod then
-            rate = mathMax(5, rate * mathMax(0.25, lod / mathSqrt(distSqr)))
-        end
-    end
-
-    return rate
-end
-
 function SANDTPIK.Solve(ply, wep)
     local tpik = ensureModel(wep)
     if not IsValid(tpik) then return end
@@ -1219,11 +1111,6 @@ function SANDTPIK.Solve(ply, wep)
 
     local isLocal = ply == LocalPlayer()
     state.detailed = isDetailed(ply, isLocal)
-
-    local delay = 1 / solveRate(ply, isLocal)
-    local now = CurTime()
-    local fullSolve = (state.lastSolve or 0) + delay <= now
-    if fullSolve then state.lastSolve = now end
 
     syncModel(wep, tpik, state)
 
@@ -1245,8 +1132,6 @@ function SANDTPIK.Solve(ply, wep)
 
     data.wep, data.tpik, data.frame = wep, tpik, FrameNumber()
     data.dropLeft = shouldDropLeftHand(ply, wep)
-    data.fullSolve = fullSolve
-    data.alpha = tweenAlpha(1 / delay)
     data.eyeAng = limitedEye(ply, smooth(state.safe or 0))
 
     if not wep.SandTPIK_Warned and handMap(ply, tpik, state).n == 0 then

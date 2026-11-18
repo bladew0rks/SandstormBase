@@ -41,11 +41,8 @@ end
 
 if SERVER then return end
 
-local cvGrip = CreateClientConVar("cl_sandswep_gripik", "1", true, false, "Sandstorm foregrip layer and left hand IK on viewmodels with grip data", 0, 1)
-local cvThumbHold = CreateClientConVar("cl_sandswep_grip_thumbhold", "0.1", true, false, "Seconds the left thumb holds its pose when the grip blend changes", 0, 1)
-local cvThumbRate = CreateClientConVar("cl_sandswep_grip_thumbrate", "6", true, false, "Left thumb grip blend speed after the hold (full blends per second)", 0.5, 60)
-local cvThumbHoldIn = CreateClientConVar("cl_sandswep_grip_thumbhold_in", "0.03", true, false, "Thumb hold when the hand returns to the grip (end of reloads)", 0, 1)
-local cvThumbRateIn = CreateClientConVar("cl_sandswep_grip_thumbrate_in", "14", true, false, "Thumb blend speed when the hand returns to the grip (end of reloads)", 0.5, 60)
+local THUMB_HOLD, THUMB_RATE = 0.1, 6
+local THUMB_HOLD_IN, THUMB_RATE_IN = 0.03, 14
 
 local sqrt, abs, min, max = math.sqrt, math.abs, math.min, math.max
 
@@ -488,10 +485,10 @@ local function ThumbWeight(cache, target)
 
     local rising = target > weight
     if not cache.twHold then
-        cache.twHold = now + (rising and cvThumbHoldIn or cvThumbHold):GetFloat()
+        cache.twHold = now + (rising and THUMB_HOLD_IN or THUMB_HOLD)
     end
     if now >= cache.twHold then
-        local step = (rising and cvThumbRateIn or cvThumbRate):GetFloat() * (now - last)
+        local step = (rising and THUMB_RATE_IN or THUMB_RATE) * (now - last)
         weight = target > weight and min(target, weight + step) or max(target, weight - step)
     end
 
@@ -693,7 +690,6 @@ end
 
 function SWEP:VMGrip(vm)
     vm.SandSwepGripAlpha = nil
-    if not cvGrip:GetBool() then return end
 
     local model = vm:GetModel()
     local data = model and SandSwep.GripData[string.lower(model)]

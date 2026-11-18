@@ -1,7 +1,5 @@
 local Shared = SandSwep.BaseShared
 local RELOAD_NONE, STAGE_NONE, STAGE_MAGOUT = Shared.RELOAD_NONE, Shared.STAGE_NONE, Shared.STAGE_MAGOUT
-local cvHolster = CreateConVar("sv_sandswep_holster", "1", bit.bor(FCVAR_ARCHIVE, FCVAR_REPLICATED, FCVAR_NOTIFY),
-    "Holster animation before switching weapons", 0, 1)
 local cvFirstDraw = CreateConVar("sv_sandswep_first_draw", "1", bit.bor(FCVAR_ARCHIVE, FCVAR_REPLICATED, FCVAR_NOTIFY),
     "Play the first draw animation the first time a weapon is equipped (0 = always the normal draw)", 0, 1)
 
@@ -225,7 +223,7 @@ function SWEP:GetHolsterAnim()
 end
 
 function SWEP:WantsHolsterAnim(wep)
-    if not cvHolster:GetBool() or not self.HolsterAnim then return false end
+    if not self.HolsterAnim then return false end
     if not IsValid(wep) or wep == self then return false end
 
     local owner = self:GetOwner()

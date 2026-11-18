@@ -2,8 +2,7 @@ local VisualFrameTime = SandSwep.VisualFrameTime
 
 if not CLIENT then return end
 
-local cvAttWorldLight = CreateClientConVar("cl_sandswep_att_worldlight", "1", true, false, "Lit viewmodel attachments", 0, 1)
-local cvGripTime = CreateClientConVar("cl_sandswep_grip_blend_time", "0.2", true, false, "Seconds the foregrip hand takes to blend on or off the grip", 0.01, 1)
+local GRIP_BLEND_TIME = 0.2
 
 local MOUNT_AXES = { Rail = { Front = Vector(1, 0, 0), Out = Vector(0, 1, 0) } }
 
@@ -80,9 +79,9 @@ function SWEP:RemoveVMAttachmentModels()
     self._vmAttEnts, self._vmAttKey = nil, nil
 end
 
-local function ModelsCurrent(wep, key, vm, lit)
+local function ModelsCurrent(wep, key, vm)
     return key and key.att == wep:GetAttData() and key.skins == wep:GetAttSkins() and key.vm == vm
-        and key.model == vm:GetModel() and key.edit == wep._attEditVer and key.lit == lit
+        and key.model == vm:GetModel() and key.edit == wep._attEditVer
 end
 
 local function AllValid(ents)
@@ -92,18 +91,13 @@ local function AllValid(ents)
     return true
 end
 
-local function SetupLighting(ent, lit)
-    if lit then
-        ent:SetRenderMode(RENDERMODE_ENVIROMENTAL)
-        ent:DrawShadow(false)
-    else
-        ent:SetNoDraw(true)
-    end
+local function SetupLighting(ent)
+    ent:SetRenderMode(RENDERMODE_ENVIROMENTAL)
+    ent:DrawShadow(false)
 end
 
 function SWEP:UpdateVMAttachmentModels(vm)
-    local lit = cvAttWorldLight:GetBool()
-    if self._vmAttEnts and ModelsCurrent(self, self._vmAttKey, vm, lit) and AllValid(self._vmAttEnts) then return end
+    if self._vmAttEnts and ModelsCurrent(self, self._vmAttKey, vm) and AllValid(self._vmAttEnts) then return end
 
     self:RemoveVMAttachmentModels()
     self._vmAttEnts = {}
@@ -116,7 +110,7 @@ function SWEP:UpdateVMAttachmentModels(vm)
         local ent = mount and ClientsideModel(mount.Model, RENDERGROUP_VIEWMODEL)
         if not IsValid(ent) then continue end
 
-        SetupLighting(ent, lit)
+        SetupLighting(ent)
         ent.SandSwepSlot = slotName
 
         if mount.Rail then
@@ -135,7 +129,7 @@ function SWEP:UpdateVMAttachmentModels(vm)
         local ent = def.Model and ClientsideModel(def.Model, RENDERGROUP_VIEWMODEL)
         if not IsValid(ent) then continue end
 
-        SetupLighting(ent, lit)
+        SetupLighting(ent)
         ent.SandSwepDef = def
         ent.SandSwepSlot = slotName
         ent.SandSwepOffset = self:GetAttachmentOffset(slotName, id, def)
@@ -158,7 +152,6 @@ function SWEP:UpdateVMAttachmentModels(vm)
         vm = vm,
         model = vm:GetModel(),
         edit = self._attEditVer,
-        lit = lit,
     }
 end
 
@@ -266,7 +259,7 @@ end
 function SWEP:ApplyGripWeight(vm)
     if vm:LookupPoseParameter("gripweight") < 0 then return end
 
-    local rate = 1 / cvGripTime:GetFloat()
+    local rate = 1 / GRIP_BLEND_TIME
     local target = GripTarget(vm, rate)
     local model, frame = vm:GetModel(), FrameNumber()
 

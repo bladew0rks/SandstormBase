@@ -17,14 +17,8 @@ local SETTINGS = {
     tilt_range = 0.59,
 }
 
-local cvEnabled = CreateClientConVar("cl_sandswep_wall", "1", true, false, "Wall collision", 0, 1)
-
 function WALL.Setting(name)
     return SETTINGS[name]
-end
-
-function WALL.IsEnabled()
-    return cvEnabled:GetBool()
 end
 
 local hull = Vector(2, 2, 2)
@@ -121,7 +115,7 @@ hook.Add("Think", "SandSwep_WallTrace", function()
     local wep = ply:GetActiveWeapon()
     if not IsValid(wep) or not wep.IsSandSwep then return end
 
-    local blocked = not WALL.IsEnabled() or ply:InVehicle()
+    local blocked = ply:InVehicle()
         or (wep.GetBipodDeployed and wep:GetBipodDeployed())
     if blocked then
         wep._wallPen = 0

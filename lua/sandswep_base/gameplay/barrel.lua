@@ -6,6 +6,55 @@ if CLIENT then
 
     local barrelFrame, barrelNext, wasActive = nil, 0, false
     local muzzleScratch, barrelScratch = Vector(), Vector()
+    local THIRD_DIR = Vector(1, 0, 0)
+
+    local function SendBarrel(ply, wep, localPos, localDir, tilt, third)
+        local active = ply:KeyDown(IN_ATTACK) or wep:GetBurstLeft() > 0 or wep:GetAimProgress() > 0
+        local now = RealTime()
+        if now >= barrelNext or (active and not wasActive) then
+            barrelNext = now + (active and SEND_ACTIVE or SEND_IDLE)
+            net.Start("sandswep_muzzle", true)
+                net.WriteVector(localPos)
+                net.WriteNormal(localDir)
+                net.WriteUInt(tilt, 7)
+                net.WriteBool(third)
+            net.SendToServer()
+        end
+        wasActive = active
+    end
+
+    local function WorldMuzzle(ent)
+        if not IsValid(ent) then return end
+
+        local attId = ent:LookupAttachment("muzzle")
+        local attData = attId and attId > 0 and ent:GetAttachment(attId)
+        if attData then return attData.Pos end
+
+        local bone = SandSwep.BoneId(ent, "b_wpn_muzzle")
+        local matrix = bone and ent:GetBoneMatrix(bone)
+        return matrix and matrix:GetTranslation()
+    end
+
+    hook.Add("PostPlayerDraw", "SandSwep_Barrel", function(ply)
+        if ply ~= LocalPlayer() or not ply:ShouldDrawLocalPlayer() then return end
+
+        local wep = ply:GetActiveWeapon()
+        if not IsValid(wep) or not wep.IsSandSwep or not wep.SetBarrelData then return end
+
+        local frameNum = FrameNumber()
+        if barrelFrame == frameNum then return end
+        barrelFrame = frameNum
+
+        local muzzle = WorldMuzzle(wep.SandTPIK_Model) or WorldMuzzle(wep)
+        if not muzzle then return end
+
+        local aimAng = ply:EyeAngles() + ply:GetViewPunchAngles()
+        local localPos = WorldToLocal(muzzle, angle_zero, wep:GetBulletSource(), aimAng)
+
+        wep:SetBarrelData(localPos, THIRD_DIR, 0, true)
+        SendBarrel(ply, wep, localPos, THIRD_DIR, 0, true)
+    end)
+
     hook.Add("PostDrawViewModel", "SandSwep_Barrel", function(vm, ply, wep)
         if ply ~= LocalPlayer() or not IsValid(wep) or not wep.IsSandSwep or not wep.SetBarrelData then return end
         if not IsValid(vm) or vm ~= ply:GetViewModel(0) or ply:ShouldDrawLocalPlayer() then return end
@@ -63,16 +112,6 @@ if CLIENT then
             end
         end
 
-        local active = ply:KeyDown(IN_ATTACK) or wep:GetBurstLeft() > 0 or wep:GetAimProgress() > 0
-        local now = RealTime()
-        if now >= barrelNext or (active and not wasActive) then
-            barrelNext = now + (active and SEND_ACTIVE or SEND_IDLE)
-            net.Start("sandswep_muzzle", true)
-                net.WriteVector(localPos)
-                net.WriteNormal(localDir)
-                net.WriteUInt(tiltDeg, 7)
-            net.SendToServer()
-        end
-        wasActive = active
+        SendBarrel(ply, wep, localPos, localDir, tiltDeg, false)
     end)
 end

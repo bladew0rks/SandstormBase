@@ -59,6 +59,9 @@ local function HookWrists(ply)
     hands.SandSwepWristHook = hands:AddCallback("BuildBonePositions", UnsquashWrists)
 end
 
+local FOREARM_BONES = { L = "ValveBiped.Bip01_L_Forearm", R = "ValveBiped.Bip01_R_Forearm" }
+local FOREARM_HANDS = { L = "ValveBiped.Bip01_L_Hand", R = "ValveBiped.Bip01_R_Hand" }
+
 local forearmRest = {}
 
 local function ForearmRest(model)
@@ -94,19 +97,20 @@ function SWEP:VMForearmFit(vm)
     local rest = ForearmRest(hands:GetModel())
     if not rest then return end
 
-    local weights = SandSwep.AnimatedHands and SandSwep.AnimatedHands() or {}
+    local weights = SandSwep.AnimatedHands and SandSwep.AnimatedHands()
 
     for side, length in pairs(rest) do
-        local w = weights[side] or 1
-        local fore = vm:LookupBone("ValveBiped.Bip01_" .. side .. "_Forearm")
-        local hand = vm:LookupBone("ValveBiped.Bip01_" .. side .. "_Hand")
+        local w = weights and weights[side] or 1
+        local fore = SandSwep.BoneId(vm, FOREARM_BONES[side])
+        local hand = SandSwep.BoneId(vm, FOREARM_HANDS[side])
         local a = fore and vm:GetBoneMatrix(fore)
         local b = hand and vm:GetBoneMatrix(hand)
         if a and b and length > 0.01 and w > 0 then
             local fit = a:GetTranslation():Distance(b:GetTranslation()) / length
             local stretch = 1 + (fit - 1) * w
             local sc = a:GetScale()
-            a:SetScale(Vector(stretch, sc.y, sc.z))
+            sc.x = stretch
+            a:SetScale(sc)
             vm:SetBoneMatrix(fore, a)
         end
     end
@@ -120,17 +124,19 @@ function SWEP:ApplyHandScale(vm)
 
     HookWrists(self:GetOwner())
 
-    local rest = SandSwep.AnimatedHands and SandSwep.AnimatedHands() or {}
-    local weight = { L = math.Round(rest.L or 1, 3), R = math.Round(rest.R or 1, 3) }
+    local rest = SandSwep.AnimatedHands and SandSwep.AnimatedHands()
+    local left, right = math.Round(rest and rest.L or 1, 3), math.Round(rest and rest.R or 1, 3)
     local scale = cvHandScale:GetFloat() * (self.HandScaleMul or 1)
-    local key = vm:GetModel() .. "|" .. scale .. "|" .. weight.L .. "|" .. weight.R
-    if vm.SandSwepHandScale and vm.SandSwepHandScale.key == key then return end
+    local model = vm:GetModel()
+
+    local cur = vm.SandSwepHandScale
+    if cur and cur.model == model and cur.scale == scale and cur.L == left and cur.R == right then return end
 
     ClearHandScale(vm)
 
     local ids = {}
     for side, list in pairs(HAND_BONES) do
-        local s = 1 + (scale - 1) * weight[side]
+        local s = 1 + (scale - 1) * (side == "L" and left or right)
         local uniform = Vector(s, s, s)
         for _, name in ipairs(list) do
             local id = vm:LookupBone(name)
@@ -141,7 +147,7 @@ function SWEP:ApplyHandScale(vm)
         end
     end
 
-    vm.SandSwepHandScale = { key = key, ids = ids }
+    vm.SandSwepHandScale = { model = model, scale = scale, L = left, R = right, ids = ids }
 end
 
 local function ClearGLRound(vm)
@@ -217,7 +223,7 @@ function SWEP:VMTubeSelector(vm)
     local cfg = self.TubeSelector
     if not cfg then return end
 
-    local bone = vm:LookupBone(cfg.Bone)
+    local bone = SandSwep.BoneId(vm, cfg.Bone)
     local parent = bone and vm:GetBoneParent(bone)
     local mat = bone and vm:GetBoneMatrix(bone)
     local parentMat = parent and parent >= 0 and vm:GetBoneMatrix(parent)

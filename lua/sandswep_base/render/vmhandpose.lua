@@ -675,8 +675,13 @@ local function VManipBlend()
 end
 
 local restWeight = {}
+local restFrame
 
 function SandSwep.AnimatedHands()
+    local frame = FrameNumber()
+    if restFrame == frame then return restWeight end
+    restFrame = frame
+
     restWeight.L, restWeight.R = 1, 1
 
     if HasGCAL() and isfunction(GCAL.GetActiveTrackIDs) then

@@ -115,6 +115,23 @@ local function Snapshot(wep, vm)
     return snap
 end
 
+local loc = Matrix()
+
+local function Localize(mats)
+    if not mats.raw then return end
+    mats.raw = nil
+
+    local inv = mats.inv
+    for i = 0, mats.n - 1 do
+        local mat = mats[i]
+        if mat then
+            loc:Set(inv)
+            loc:Mul(mat)
+            mat:Set(loc)
+        end
+    end
+end
+
 local function TrackChanges(wep, vm, snap)
     local seq = vm:GetSequence()
     local att = wep:GetAttData()
@@ -130,6 +147,7 @@ local function TrackChanges(wep, vm, snap)
         local dur = not swapped and snap.valid and wep:GetSeqBlendIn(vm, seq, snap.seq)
         if dur and dur > 0 then
             local old = wep._vmBlend
+            Localize(snap.m)
             wep._vmBlend = { start = RealTime(), dur = dur, from = snap.m }
             snap.m = (old and old.from) or snap.spare or {}
             snap.spare = nil
@@ -156,7 +174,20 @@ local function BlendWeight(wep, snap)
 end
 
 local CAPTURE_INTERVAL = 1 / 120
-local base, toLocal, loc, world = Matrix(), Matrix(), Matrix(), Matrix()
+local base, toLocal, world = Matrix(), Matrix(), Matrix()
+
+local function CaptureRaw(vm, mats, numBones)
+    local inv = mats.inv
+    if not inv then
+        inv = Matrix()
+        mats.inv = inv
+    end
+    inv:Set(base)
+    inv:InvertTR()
+
+    for i = 0, numBones - 1 do mats[i] = vm:GetBoneMatrix(i) end
+    mats.raw, mats.n = true, numBones
+end
 
 function SWEP:VMBoneBlend(vm, numBones)
     local snap = Snapshot(self, vm)
@@ -176,10 +207,18 @@ function SWEP:VMBoneBlend(vm, numBones)
 
     base:SetTranslation(vm:GetPos())
     base:SetAngles(vm:GetAngles())
-    toLocal:Set(base)
-    toLocal:InvertTR()
 
     local current = snap.m
+    if not blend then
+        CaptureRaw(vm, current, numBones)
+        snap.valid = true
+        return
+    end
+
+    toLocal:Set(base)
+    toLocal:InvertTR()
+    if capture then current.raw = nil end
+
     for i = 0, numBones - 1 do
         local mat = vm:GetBoneMatrix(i)
         if mat then
@@ -202,6 +241,8 @@ function SWEP:VMBoneBlend(vm, numBones)
                 end
                 keep:Set(loc)
             end
+        elseif capture then
+            current[i] = nil
         end
     end
 

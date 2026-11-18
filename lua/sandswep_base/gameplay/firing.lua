@@ -113,7 +113,7 @@ end
 function SWEP:UsesBallistics(numBullets)
     local ballistics = SandSwep.Ballistics
     if not ballistics or not ballistics.Enabled() then return false end
-    if numBullets ~= 1 or self.Hitscan then return false end
+    if numBullets ~= 1 or (self.Primary.NumShots or 1) > 1 or self.Hitscan then return false end
 
     local ammo = self:GetAmmoDef()
     return not (ammo and ammo.Hitscan)

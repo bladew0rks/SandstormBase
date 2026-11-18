@@ -153,14 +153,9 @@ hook.Add("PopulateToolMenu", "SandSwep_Options", function()
         panel:NumSlider("Idle breathing", "cl_sandswep_breath", 0, 3, 2)
         panel:NumSlider("Sprint sway", "cl_sandswep_sprintcam", 0, 3, 2)
         panel:CheckBox("Centred bipod hold", "cl_sandswep_bipod_centered")
-        panel:NumSlider("Foregrip hand blend time", "cl_sandswep_grip_blend_time", 0.01, 1, 2)
-
-        panel:Help("Wall collision")
-        panel:CheckBox("Enabled", "cl_sandswep_wall")
 
         ResetButton(panel, {"cl_sandswep_vmfov", "cl_sandswep_vmfov_aim", "cl_sandswep_cameraanim", "cl_sandswep_bob", "cl_sandswep_breath", "cl_sandswep_sprintcam",
-            "cl_sandswep_wall",
-            "cl_sandswep_bipod_centered", "cl_sandswep_grip_blend_time"})
+            "cl_sandswep_bipod_centered"})
     end)
 
     spawnmenu.AddToolMenuOption("Options", CATEGORY, "sandswep_scopes", "Scopes", "", "", function(panel)
@@ -256,6 +251,27 @@ hook.Add("PopulateToolMenu", "SandSwep_Options", function()
         ResetButton(panel, {"sv_sandswep_barrelbullets", "sv_sandswep_first_draw", "sv_sandswep_recoil_mult", "sv_sandswep_crouch_recoil", "sv_sandswep_reload_speed", "sv_sandswep_damage_mult",
             "sv_sandswep_freeaim", "sv_sandswep_freeaim_scale", "sv_sandswep_magazines",
             "sv_sandswep_session_loadouts", "sv_sandswep_shotgun_breach", "sv_sandswep_explosive_breach", "sv_sandswep_breach_respawn", "sv_sandswep_nvg_allow"})
+    end)
+
+    spawnmenu.AddToolMenuOption("Options", CATEGORY, "sandswep_ballistics", "Ballistics", "", "", function(panel)
+        panel:ClearControls()
+        panel:CheckBox("Bullet travel time and drop", "sv_sandswep_ballistics")
+        panel:NumSlider("Bullet drop", "sv_sandswep_ballistics_gravity", 0, 3, 2)
+        panel:NumSlider("Lowest damage at range", "sv_sandswep_ballistics_min_damage", 0, 1, 2)
+        panel:CheckBox("Penetration", "sv_sandswep_penetration")
+        panel:NumSlider("Penetration strength", "sv_sandswep_penetration_mult", 0, 3, 2)
+        panel:NumSlider("Most surfaces per bullet", "sv_sandswep_penetration_max", 0, 10, 0)
+        panel:CheckBox("Tracers", "sv_sandswep_bullet_tracers")
+        panel:NumSlider("Tracer every Nth round", "sv_sandswep_bullet_tracer_every", 1, 10, 0)
+        panel:NumSlider("Tracer burn time (s)", "sv_sandswep_bullet_tracer_time", 0.5, 15, 1)
+        panel:CheckBox("Bullet cracks", "sv_sandswep_bullet_cracks")
+        panel:NumSlider("Debug drawing", "sv_sandswep_ballistics_debug", 0, 4, 0)
+        panel:ControlHelp("1: paths only, 2: short labels, 3: full numbers, 4: full numbers only where bullets stop")
+        panel:NumSlider("Debug drawing lifetime (s)", "sv_sandswep_ballistics_debug_time", 1, 600, 0)
+
+        ResetButton(panel, {"sv_sandswep_ballistics", "sv_sandswep_ballistics_gravity", "sv_sandswep_ballistics_min_damage",
+            "sv_sandswep_penetration", "sv_sandswep_penetration_mult", "sv_sandswep_penetration_max",
+            "sv_sandswep_bullet_tracers", "sv_sandswep_bullet_tracer_every", "sv_sandswep_bullet_tracer_time", "sv_sandswep_bullet_cracks", "sv_sandswep_ballistics_debug", "sv_sandswep_ballistics_debug_time"})
     end)
 
     spawnmenu.AddToolMenuOption("Options", CATEGORY, "sandswep_developer", "Developer", "", "", function(panel)

@@ -965,7 +965,7 @@ function SWEP:GetFOVKick()
     return amount * math.min(elapsed / 0.012, 1) * math.exp(-elapsed * 11)
 end
 
-function SWEP:TranslateFOV(fov)
+local function ComputeFOV(self, fov)
     local blend = self:GetAimProgress()
     if blend <= 0 then return fov end
 
@@ -982,6 +982,30 @@ function SWEP:TranslateFOV(fov)
 
     blend = blend * blend * (3 - 2 * blend)
     return fov / Lerp(blend, 1, zoom)
+end
+
+function SWEP:TranslateFOV(fov)
+    if SERVER then return ComputeFOV(self, fov) end
+
+    local memo = self._fovMemo
+    if not memo then
+        memo = {}
+        self._fovMemo = memo
+    end
+
+    local frame = FrameNumber()
+    if memo.frame ~= frame then
+        table.Empty(memo)
+        memo.frame = frame
+    end
+
+    local out = memo[fov]
+    if not out then
+        out = ComputeFOV(self, fov)
+        memo[fov] = out
+    end
+
+    return out
 end
 
 local cvAdsSens, cvScopeSens, cvScopeMatch

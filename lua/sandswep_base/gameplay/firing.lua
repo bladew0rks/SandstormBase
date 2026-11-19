@@ -250,30 +250,36 @@ SWEP.BarrelZero = 100
 local BARREL_MAX_DIST = 60
 local BARREL_MIN_DOT = math.cos(math.rad(80))
 local BARREL_STALE = 0.5
+local BARREL_ADS_OFFSET = 0.45
 
 local cvBarrel = CreateConVar("sv_sandswep_barrelbullets", "1", SV_FLAGS,
     "Bullets from the barrel", 0, 1)
 
 function SWEP:SetBarrelData(pos, dir, tilt)
-    if pos:Length() > BARREL_MAX_DIST then
-        pos = pos:GetNormalized() * BARREL_MAX_DIST
+    local barrel = self._barrel
+    if not barrel then
+        barrel = { pos = Vector(), dir = Vector() }
+        self._barrel = barrel
     end
 
-    dir:Normalize()
-    if dir.x < BARREL_MIN_DOT then
-        dir = Vector(1, 0, 0)   -- nonsense / cheating: trust the aim
+    barrel.pos:Set(pos)
+    if barrel.pos:LengthSqr() > BARREL_MAX_DIST * BARREL_MAX_DIST then
+        barrel.pos:Normalize()
+        barrel.pos:Mul(BARREL_MAX_DIST)
     end
 
-    local barrel = self._barrel or {}
-    self._barrel = barrel
+    barrel.dir:Set(dir)
+    barrel.dir:Normalize()
+    if barrel.dir.x < BARREL_MIN_DOT then
+        barrel.dir:SetUnpacked(1, 0, 0)   -- nonsense / cheating: trust the aim
+    end
 
-    barrel.pos = pos
-    barrel.dir = dir
     barrel.time = CurTime()
     barrel.tilt = math.Clamp(tilt or 0, 0, 90)
 end
 
 local barrelTrace = {}
+local barrelPosScratch = Vector()
 
 function SWEP:GetBarrelShot()
     local owner = self:GetOwner()
@@ -290,26 +296,37 @@ function SWEP:GetBarrelShot()
         return shootPos, aimDir, shootPos, false
     end
 
-    local aimAng = owner:EyeAngles() + owner:GetViewPunchAngles()
-    local muzzle = LocalToWorld(barrel.pos, angle_zero, shootPos, aimAng)
-    local barrelDir = LocalToWorld(barrel.dir, angle_zero, vector_origin, aimAng)
-    barrelDir:Normalize()
-
-    local zeroDist = (self.BarrelZero or 100) * UNITS_PER_METER
-    local zeroDir = shootPos + aimDir * zeroDist - muzzle
-    if self:UsesBallistics(self:GetPelletCount()) then
-        local def = self:GetCalibre()
-        local speed = self:GetMuzzleVelocity() * UNITS_PER_METER
-        zeroDir.z = zeroDir.z + SandSwep.Ballistics.DropAt(def, SandSwep.Ballistics.TimeAtSpeed(def, speed), zeroDist)
-    end
-    zeroDir:Normalize()
-
     local blend = math.Clamp(self:GetAimProgress(), 0, 1)
     blend = blend * blend * (3 - 2 * blend)
     blend = blend * (1 - math.Clamp(barrel.tilt / 5, 0, 1))
 
-    local dir = LerpVector(blend, barrelDir, zeroDir)
-    dir:Normalize()
+    local localPos = barrel.pos
+    if blend > 0 then
+        local target = Lerp(self:GetPointAimProgress(), BARREL_ADS_OFFSET, 1)
+        local scale = Lerp(blend, 1, target)
+        barrelPosScratch:SetUnpacked(localPos.x, localPos.y * scale, localPos.z * scale)
+        localPos = barrelPosScratch
+    end
+
+    local aimAng = owner:EyeAngles() + owner:GetViewPunchAngles()
+    local muzzle = LocalToWorld(localPos, angle_zero, shootPos, aimAng)
+    local barrelDir = LocalToWorld(barrel.dir, angle_zero, vector_origin, aimAng)
+    barrelDir:Normalize()
+
+    local dir = barrelDir
+    if blend > 0 then
+        local zeroDist = (self.BarrelZero or 100) * UNITS_PER_METER
+        local zeroDir = shootPos + aimDir * zeroDist - muzzle
+        if self:UsesBallistics(self:GetPelletCount()) then
+            local def = self:GetCalibre()
+            local speed = self:GetMuzzleVelocity() * UNITS_PER_METER
+            zeroDir.z = zeroDir.z + SandSwep.Ballistics.DropAt(def, SandSwep.Ballistics.TimeAtSpeed(def, speed), zeroDist)
+        end
+        zeroDir:Normalize()
+
+        dir = LerpVector(blend, barrelDir, zeroDir)
+        dir:Normalize()
+    end
 
     local src = muzzle
     local tr = SandSwep.TraceLine(shootPos, muzzle, owner, MASK_SHOT, barrelTrace)

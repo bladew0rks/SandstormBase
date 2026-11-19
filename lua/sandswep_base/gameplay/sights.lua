@@ -402,11 +402,12 @@ function SWEP:UpdateVMPoseParams(reset)
     local vm = owner:GetViewModel()
     if not IsValid(vm) then return end
 
+    local model = vm:GetModel()
     if reset then
         if vm:LookupPoseParameter("firemode") >= 0 then vm:SetPoseParameter("firemode", 0) end
         self._svModeKey, self._svModeModel = nil, nil
     else
-        local mode, model = self:GetFireMode(), vm:GetModel()
+        local mode = self:GetFireMode()
         if self._svModeKey ~= mode or self._svModeModel ~= model then
             self._svModeKey, self._svModeModel = mode, model
             self:ApplyVMFireModePose(vm)
@@ -422,7 +423,7 @@ function SWEP:UpdateVMPoseParams(reset)
         return
     end
 
-    local att, model = self:GetAttData(), vm:GetModel()
+    local att = self:GetAttData()
     if self._svPoseKey == att and self._svPoseModel == model then return end
     self._svPoseKey, self._svPoseModel = att, model
 
@@ -987,23 +988,24 @@ end
 function SWEP:TranslateFOV(fov)
     if SERVER then return ComputeFOV(self, fov) end
 
-    local memo = self._fovMemo
-    if not memo then
-        memo = {}
-        self._fovMemo = memo
-    end
-
     local frame = FrameNumber()
-    if memo.frame ~= frame then
-        table.Empty(memo)
-        memo.frame = frame
+    if self._fovFrame == frame then
+        if self._fovIn == fov then return self._fovOut end
+        local extra = self._fovExtra
+        if extra and extra[fov] then return extra[fov] end
+
+        local out = ComputeFOV(self, fov)
+        if not extra then
+            extra = {}
+            self._fovExtra = extra
+        end
+        extra[fov] = out
+        return out
     end
 
-    local out = memo[fov]
-    if not out then
-        out = ComputeFOV(self, fov)
-        memo[fov] = out
-    end
+    local out = ComputeFOV(self, fov)
+    self._fovFrame, self._fovIn, self._fovOut = frame, fov, out
+    if self._fovExtra then table.Empty(self._fovExtra) end
 
     return out
 end

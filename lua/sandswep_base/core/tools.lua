@@ -154,6 +154,24 @@ local function RunBind(ply, bind)
     if IsValid(wep) and wep.IsSandSwep then bind[2](wep) end
 end
 
+local BIND_CACHE_TTL = 1.0
+
+local function PlayerBinds(ply, now)
+    local cache = ply.SandSwepBindCache
+    if cache and now - cache.at < BIND_CACHE_TTL then return cache end
+
+    cache = cache or { primary = {}, secondary = {} }
+    ply.SandSwepBindCache = cache
+    cache.at = now
+    cache.delay = math.Clamp(ply:GetInfoNum("cl_sandswep_doubletap_delay", 0.3), 0.05, 1)
+
+    for i, bind in ipairs(KEY_BINDS) do
+        cache.primary[i], cache.secondary[i] = BindKeys(ply, bind[1])
+    end
+
+    return cache
+end
+
 hook.Add("PlayerButtonDown", "SandSwep_FireModeKeys", function(ply, button)
     if CLIENT and not IsFirstTimePredicted() then return end
 
@@ -164,21 +182,24 @@ hook.Add("PlayerButtonDown", "SandSwep_FireModeKeys", function(ply, button)
     if not IsValid(wep) or not wep.IsSandSwep then return end
 
     local now = CurTime()
-    local delay = math.Clamp(ply:GetInfoNum("cl_sandswep_doubletap_delay", 0.3), 0.05, 1)
+    local binds = PlayerBinds(ply, now)
+    local delay = binds.delay
+    local held = ply.SandSwepHeld
 
-    local combo, double, singles, tapKeys = nil, nil, {}, {}
-    for _, bind in ipairs(KEY_BINDS) do
-        local primary, secondary = BindKeys(ply, bind[1])
+    local combo, double, single1, single2, isTapKey
+    for i, bind in ipairs(KEY_BINDS) do
+        local primary, secondary = binds.primary[i], binds.secondary[i]
         if primary > 0 and secondary > 0 and primary == secondary then
-            tapKeys[primary] = true
-            if primary == button then double = bind end
+            if primary == button then
+                isTapKey = true
+                double = bind
+            end
         elseif primary > 0 and secondary > 0 then
-            local held = ply.SandSwepHeld
             if (button == primary and held[secondary]) or (button == secondary and held[primary]) then
                 combo = combo or bind
             end
         elseif primary == button then
-            singles[#singles + 1] = bind
+            if not single1 then single1 = bind else single2 = bind end
         end
     end
 
@@ -199,11 +220,18 @@ hook.Add("PlayerButtonDown", "SandSwep_FireModeKeys", function(ply, button)
         ply.SandSwepTap = { button = button, time = now }
     end
 
-    for _, bind in ipairs(singles) do
-        if tapKeys[button] then
-            if SERVER then ply.SandSwepPending = { bind = bind, at = now + delay } end
+    if single1 then
+        if isTapKey then
+            if SERVER then ply.SandSwepPending = { bind = single1, at = now + delay } end
         else
-            RunBind(ply, bind)
+            RunBind(ply, single1)
+        end
+    end
+    if single2 then
+        if isTapKey then
+            if SERVER then ply.SandSwepPending = { bind = single2, at = now + delay } end
+        else
+            RunBind(ply, single2)
         end
     end
 end)

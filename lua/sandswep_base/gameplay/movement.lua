@@ -76,9 +76,18 @@ function SWEP:WantsSprint(owner)
 end
 
 function SWEP:UsesSprintAnims()
+    if CLIENT then
+        local frame = FrameNumber()
+        if self._sprintAnimFrame == frame then return self._sprintAnims end
+        self._sprintAnimFrame = frame
+    end
+
     local owner = self:GetOwner()
     local vm = IsValid(owner) and owner:IsPlayer() and owner:GetViewModel()
-    if not IsValid(vm) then return false end
+    if not IsValid(vm) then
+        self._sprintAnims = false
+        return false
+    end
 
     self:GetActiveAnimSets()
     local key, model = self._animSetKey, vm:GetModel()

@@ -87,6 +87,60 @@ local function ForearmRest(model)
     return rest or nil
 end
 
+local function ForearmBoneIds(vm)
+    local model = vm:GetModel()
+    local ids = vm.SandSwepForearmIds
+    if ids and ids.model == model then return ids end
+
+    ids = {
+        model = model,
+        L_fore = SandSwep.BoneId(vm, FOREARM_BONES.L) or false,
+        L_hand = SandSwep.BoneId(vm, FOREARM_HANDS.L) or false,
+        R_fore = SandSwep.BoneId(vm, FOREARM_BONES.R) or false,
+        R_hand = SandSwep.BoneId(vm, FOREARM_HANDS.R) or false,
+    }
+    vm.SandSwepForearmIds = ids
+    return ids
+end
+
+local sqrt = math.sqrt
+
+local function ScaleMatrixX(mat, stretch)
+    local m11, m12, m13, m14, m21, m22, m23, m24, m31, m32, m33, m34 = mat:Unpack()
+    local len = sqrt(m11 * m11 + m21 * m21 + m31 * m31)
+    if len < 1e-6 then return end
+
+    local k = stretch / len
+    mat:SetUnpacked(
+        m11 * k, m12, m13, m14,
+        m21 * k, m22, m23, m24,
+        m31 * k, m32, m33, m34,
+        0, 0, 0, 1)
+end
+
+local function FitSide(vm, fore, hand, length, weight, cachedStretch)
+    if not fore or not length or length <= 0.01 or weight <= 0 then return nil end
+
+    local a = vm:GetBoneMatrix(fore)
+    if not a then return nil end
+
+    local stretch = cachedStretch
+    if not stretch then
+        local b = hand and vm:GetBoneMatrix(hand)
+        if not b then return nil end
+
+        local dx = a:GetField(1, 4) - b:GetField(1, 4)
+        local dy = a:GetField(2, 4) - b:GetField(2, 4)
+        local dz = a:GetField(3, 4) - b:GetField(3, 4)
+        local fit = sqrt(dx * dx + dy * dy + dz * dz) / length
+        stretch = 1 + (fit - 1) * weight
+    end
+
+    ScaleMatrixX(a, stretch)
+    vm:SetBoneMatrix(fore, a)
+    return stretch
+end
+
 function SWEP:VMForearmFit(vm)
     if self.NoHandScale then return end
 
@@ -94,25 +148,32 @@ function SWEP:VMForearmFit(vm)
     local hands = IsValid(ply) and ply:GetHands()
     if not IsValid(hands) or hands:GetParent() ~= vm then return end
 
-    local rest = ForearmRest(hands:GetModel())
+    local handsModel = hands:GetModel()
+    local cache = vm.SandSwepForearmCache
+    if not cache then
+        cache = {}
+        vm.SandSwepForearmCache = cache
+    end
+
+    local rest = cache.handsModel == handsModel and cache.rest or ForearmRest(handsModel)
     if not rest then return end
 
-    local weights = SandSwep.AnimatedHands and SandSwep.AnimatedHands()
+    local ids = ForearmBoneIds(vm)
+    local frame = FrameNumber()
+    local seq, cycle = vm:GetSequence(), vm:GetCycle()
+    local reuse = cache.frame == frame and cache.seq == seq and cache.cycle == cycle and cache.handsModel == handsModel
 
-    for side, length in pairs(rest) do
-        local w = weights and weights[side] or 1
-        local fore = SandSwep.BoneId(vm, FOREARM_BONES[side])
-        local hand = SandSwep.BoneId(vm, FOREARM_HANDS[side])
-        local a = fore and vm:GetBoneMatrix(fore)
-        local b = hand and vm:GetBoneMatrix(hand)
-        if a and b and length > 0.01 and w > 0 then
-            local fit = a:GetTranslation():Distance(b:GetTranslation()) / length
-            local stretch = 1 + (fit - 1) * w
-            local sc = a:GetScale()
-            sc.x = stretch
-            a:SetScale(sc)
-            vm:SetBoneMatrix(fore, a)
-        end
+    local weights = not reuse and SandSwep.AnimatedHands and SandSwep.AnimatedHands() or nil
+    local wL = reuse and 1 or (weights and weights.L or 1)
+    local wR = reuse and 1 or (weights and weights.R or 1)
+
+    local sL = FitSide(vm, ids.L_fore, ids.L_hand, rest.L, wL, reuse and cache.sL or nil)
+    local sR = FitSide(vm, ids.R_fore, ids.R_hand, rest.R, wR, reuse and cache.sR or nil)
+
+    if not reuse then
+        cache.frame, cache.seq, cache.cycle = frame, seq, cycle
+        cache.handsModel, cache.rest = handsModel, rest
+        cache.sL, cache.sR = sL, sR
     end
 end
 

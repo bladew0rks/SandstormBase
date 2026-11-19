@@ -879,7 +879,8 @@ local SHUTTER = 0.5
 local BURNOUT = 0.35
 local EXPOSURE = 0.05
 local FAR_DRAW = 12000
-local HISTORY = 48
+local HISTORY = 16
+local SMEAR_STEP = EXPOSURE / 12
 local MAX_LIGHTS = 6
 
 local tracerMat = Material("sandswep/fx/tracer")
@@ -903,8 +904,8 @@ local function Palette(v)
     return PALETTES[v.Def.TracerColor] or PALETTES.red
 end
 
-local function Burn(v)
-    local life = cvTracerTime:GetFloat()
+local function Burn(v, life)
+    life = life or cvTracerTime:GetFloat()
     local left = math.Clamp((life - v.Age) / (life * BURNOUT), 0, 1)
     local heat = left * left * (3 - 2 * left)
     local sputter = 1 - 0.4 * (1 - left) * math.abs(math.sin(v.Age * 31 + v.Flicker) * math.sin(v.Age * 17))
@@ -1143,6 +1144,10 @@ hook.Add("RenderScene", "SandSwep_BallisticsView", function(origin, angles)
     viewPos:Set(origin)
     viewAng:Set(angles)
 
+    local now = RealTime()
+    local prev = histCount > 0 and history[histHead]
+    if prev and now - prev.t < SMEAR_STEP then return end
+
     histHead = histHead % HISTORY + 1
     local h = history[histHead]
     if not h then
@@ -1151,41 +1156,69 @@ hook.Add("RenderScene", "SandSwep_BallisticsView", function(origin, angles)
     end
     h.pos:Set(origin)
     h.ang:Set(angles)
-    h.t = RealTime()
+    h.t = now
     histCount = math.min(histCount + 1, HISTORY)
 end)
 
 local tailPos, nearHead, nearTail, toPoint = Vector(), Vector(), Vector(), Vector()
 local stripPts = {}
-local smearMats, smearAge, smearCount, smearFrame = {}, {}, 0, -1
-local viewMat, histMat = Matrix(), Matrix()
+local smearM, smearAge, smearCount, smearFrame = {}, {}, 0, -1
+local viewMat, histMat, smearTmp = Matrix(), Matrix(), Matrix()
 
 local function SmearFrames(now)
     local frame = FrameNumber()
     if smearFrame == frame then return smearCount end
     smearFrame = frame
 
+    if histCount == 0 then
+        smearCount = 0
+        return 0
+    end
+
+    local moved = false
+    local vp, vy, vr = viewAng.p, viewAng.y, viewAng.r
+    for k = 0, histCount - 1 do
+        local h = history[(histHead - 1 - k) % HISTORY + 1]
+        if now - h.t > EXPOSURE then break end
+        local ha = h.ang
+        if h.pos:DistToSqr(viewPos) > 1e-4
+            or math.abs(ha.p - vp) > 0.02
+            or math.abs(math.AngleDifference(ha.y, vy)) > 0.02
+            or math.abs(ha.r - vr) > 0.02 then
+            moved = true
+            break
+        end
+    end
+
+    if not moved then
+        smearCount = 0
+        return 0
+    end
+
     viewMat:SetTranslation(viewPos)
     viewMat:SetAngles(viewAng)
 
-    local n = 0
+    local n = 1
+    smearAge[1] = 0
+
     for k = 0, histCount - 1 do
         local h = history[(histHead - 1 - k) % HISTORY + 1]
         local age = now - h.t
         if age > EXPOSURE then break end
         n = n + 1
 
-        local mat = smearMats[n]
-        if not mat then
-            mat = Matrix()
-            smearMats[n] = mat
-        end
-
         histMat:SetTranslation(h.pos)
         histMat:SetAngles(h.ang)
         histMat:InvertTR()
-        mat:Set(viewMat)
-        mat:Mul(histMat)
+        smearTmp:Set(viewMat)
+        smearTmp:Mul(histMat)
+
+        local m = smearM[n]
+        if not m then
+            m = {}
+            smearM[n] = m
+        end
+        m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8], m[9], m[10], m[11], m[12] = smearTmp:Unpack()
         smearAge[n] = age / EXPOSURE
     end
 
@@ -1217,21 +1250,40 @@ local function ToSky(pos, origin, scale, out)
     return out
 end
 
+local function SmearPoint(k, hx, hy, hz, eye, f, skyOrigin, skyScale)
+    local pt = stripPts[k]
+    if not pt then
+        pt = Vector()
+        stripPts[k] = pt
+    end
+
+    if k == 1 then
+        pt:SetUnpacked(hx, hy, hz)
+    else
+        local m = smearM[k]
+        pt:SetUnpacked(
+            m[1] * hx + m[2] * hy + m[3] * hz + m[4],
+            m[5] * hx + m[6] * hy + m[7] * hz + m[8],
+            m[9] * hx + m[10] * hy + m[11] * hz + m[12])
+    end
+
+    if f < 1 then PullIn(pt, eye, f, pt) end
+    if skyOrigin then ToSky(pt, skyOrigin, skyScale, pt) end
+    return pt
+end
+
 local function SmearStrip(head, width, alpha, now, eye, f, skyOrigin, skyScale)
     local n = SmearFrames(now)
     if n < 2 then return end
 
-    for k = 1, n do
-        local pt = stripPts[k]
-        if not pt then
-            pt = Vector()
-            stripPts[k] = pt
-        end
-        pt:Set(smearMats[k] * head)
-        if f < 1 then PullIn(pt, eye, f, pt) end
-        if skyOrigin then ToSky(pt, skyOrigin, skyScale, pt) end
+    local hx, hy, hz = head.x, head.y, head.z
+    local p1 = SmearPoint(1, hx, hy, hz, eye, f, skyOrigin, skyScale)
+    local pn = SmearPoint(n, hx, hy, hz, eye, f, skyOrigin, skyScale)
+    if p1:DistToSqr(pn) < width * width then return end
+
+    for k = 2, n - 1 do
+        SmearPoint(k, hx, hy, hz, eye, f, skyOrigin, skyScale)
     end
-    if stripPts[1]:DistToSqr(stripPts[n]) < width * width then return end
 
     render.SetMaterial(tracerMat)
     render.StartBeam(n)
@@ -1277,19 +1329,28 @@ hook.Add("PostDrawTranslucentRenderables", "SandSwep_BallisticsSkyTracers", func
     if depth or not sky or sky3d == false then return end
 
     skyFrame = FrameNumber()
-    if #visuals == 0 then return end
+    local count = #visuals
+    if count == 0 then return end
+
+    local anySky = false
+    for i = 1, count do
+        local v = visuals[i]
+        if v.Tracer and v.Sky then anySky = true break end
+    end
+    if not anySky then return end
 
     local scale = GetGlobal2Int("SandSwep_SkyScale", 16)
     local origin = EyePos() - viewPos / scale
     local setup = render.GetViewSetup and render.GetViewSetup()
     local pixel = 2 * math.tan(math.rad((setup and setup.fov or 90) * 0.5)) / math.max(ScrH(), 1)
     local now = RealTime()
+    local life = cvTracerTime:GetFloat()
 
-    for i = 1, #visuals do
+    for i = 1, count do
         local v = visuals[i]
         if not v.Tracer or not v.Sky then continue end
 
-        local heat, thin = Burn(v)
+        local heat, thin = Burn(v, life)
         local width = Width(v.Pos:Distance(viewPos), pixel) * thin / scale
         local alpha = math.max(v.Fade, 0) * heat
 
@@ -1305,7 +1366,18 @@ hook.Add("PostDrawTranslucentRenderables", "SandSwep_BallisticsSkyTracers", func
 end)
 
 hook.Add("PostDrawTranslucentRenderables", "SandSwep_BallisticsTracers", function(depth, sky)
-    if depth or sky or #visuals == 0 then return end
+    if depth or sky then return end
+
+    local count = #visuals
+    if count == 0 then return end
+
+    local frame = FrameNumber()
+    local any = false
+    for i = 1, count do
+        local v = visuals[i]
+        if v.Tracer and not (v.Sky and skyFrame == frame) then any = true break end
+    end
+    if not any then return end
 
     local eye, fwd = EyePos(), EyeVector()
     local pip = SandSwep.RenderingPIP == true
@@ -1315,16 +1387,17 @@ hook.Add("PostDrawTranslucentRenderables", "SandSwep_BallisticsTracers", functio
 
     local smear = eye:DistToSqr(viewPos) < 1
     local now = RealTime()
+    local life = cvTracerTime:GetFloat()
     local farDraw = math.min(FAR_DRAW, (setup and setup.zfar or 30000) * 0.5)
 
     local lights = 0
-    for i = 1, #visuals do
+    for i = 1, count do
         local v = visuals[i]
-        if not v.Tracer or (v.Sky and skyFrame == FrameNumber()) then continue end
+        if not v.Tracer or (v.Sky and skyFrame == frame) then continue end
 
         local head = v.Pos
         local tail = TracerTail(v, tailPos)
-        local heat, thin = Burn(v)
+        local heat, thin = Burn(v, life)
         local dist = head:Distance(eye)
         local width = Width(dist, pixel) * thin
         local alpha = math.max(v.Fade, 0) * heat

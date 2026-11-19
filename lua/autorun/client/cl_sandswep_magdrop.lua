@@ -223,7 +223,17 @@ local function ImpactSound(mag, strength)
     if surf then ent:EmitSound("SandSwep.MagDrop.surface_" .. surf, 65, math.random(96, 104), vol) end
 end
 
+local MAG_POLL_INTERVAL = 1 / 60
+local nextMagPoll = 0
+local fadeColor = Color(255, 255, 255, 255)
+
 hook.Add("Think", "SandSwep_MagDropProps", function()
+    if #mags == 0 then return end
+
+    local rt = RealTime()
+    local pollPhys = rt >= nextMagPoll
+    if pollPhys then nextMagPoll = rt + MAG_POLL_INTERVAL end
+
     local now = CurTime()
     local life = cvLife:GetFloat()
 
@@ -242,17 +252,25 @@ hook.Add("Think", "SandSwep_MagDropProps", function()
         end
 
         if age > life then
-            ent:SetRenderMode(RENDERMODE_TRANSCOLOR)
-            ent:SetColor(Color(255, 255, 255, 255 * (1 - (age - life) / FADE)))
+            if not mag.fading then
+                mag.fading = true
+                ent:SetRenderMode(RENDERMODE_TRANSCOLOR)
+            end
+            fadeColor.a = 255 * (1 - (age - life) / FADE)
+            ent:SetColor(fadeColor)
         end
 
+        if not pollPhys or mag.hits >= 4 then continue end
+
         local phys = ent:GetPhysicsObject()
-        if not IsValid(phys) or mag.hits >= 4 then continue end
+        if not IsValid(phys) then continue end
 
         local vel = phys:GetVelocity()
-        local impact = (vel - mag.lastVel):Length()
-        if impact > 70 and now >= mag.nextSound then
-            ImpactSound(mag, impact)
+        local lv = mag.lastVel
+        local dx, dy, dz = vel.x - lv.x, vel.y - lv.y, vel.z - lv.z
+        local impactSqr = dx * dx + dy * dy + dz * dz
+        if impactSqr > 4900 and now >= mag.nextSound then
+            ImpactSound(mag, math.sqrt(impactSqr))
             mag.hits = mag.hits + 1
             mag.nextSound = now + 0.12
         end

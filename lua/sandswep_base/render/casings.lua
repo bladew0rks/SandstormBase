@@ -187,37 +187,42 @@ hook.Add("PostDrawViewModel", "SandSwep_Shells", function(vm, ply, wep)
     if lastFrame == frameNum then return end
     lastFrame = frameNum
 
-    local info = view.ViewInfo(wep, true)
-
-    for i = #pending, 1, -1 do
-        local queued = pending[i]
-        if queued.wep == wep and IsValid(wep) then SpawnAll(wep, vm, info, false, queued.ejects) end
-        table.remove(pending, i)
+    local info
+    if #pending > 0 then
+        info = view.ViewInfo(wep, true)
+        for i = #pending, 1, -1 do
+            local queued = pending[i]
+            if queued.wep == wep and IsValid(wep) then SpawnAll(wep, vm, info, false, queued.ejects) end
+            table.remove(pending, i)
+        end
     end
 
-    local ct = CurTime()
-    for _, shell in ipairs(shells) do
-        local ent = shell.ent
-        if not shell.vmStage or not IsValid(ent) then continue end
+    if #shells > 0 then
+        local ct = CurTime()
+        for _, shell in ipairs(shells) do
+            local ent = shell.ent
+            if not shell.vmStage or not IsValid(ent) then continue end
 
-        local age = ct - shell.born
-        if age >= EJECT_VM_TIME then
-            LeaveViewmodel(shell)
-            continue
+            local age = ct - shell.born
+            if age >= EJECT_VM_TIME then
+                LeaveViewmodel(shell)
+                continue
+            end
+
+            info = info or view.ViewInfo(wep, true)
+            local worldPos = ent:GetPos()
+            local scale = Lerp(math.Clamp(age / EJECT_VM_TIME, 0, 1), 1, 1 / info.k)
+
+            scaleVec:SetUnpacked(scale, scale, scale)
+            scaleMatrix:Identity()
+            scaleMatrix:Scale(scaleVec)
+            ent:EnableMatrix("RenderMultiply", scaleMatrix)
+
+            ent:SetPos(view.ToVM(worldPos, info))
+            ent:SetupBones()
+            ent:DrawModel()
+            ent:SetPos(worldPos)
         end
-
-        local worldPos = ent:GetPos()
-        local scale = Lerp(math.Clamp(age / EJECT_VM_TIME, 0, 1), 1, 1 / info.k)
-
-        scaleVec:SetUnpacked(scale, scale, scale)
-        scaleMatrix:Identity()
-        scaleMatrix:Scale(scaleVec)
-        ent:EnableMatrix("RenderMultiply", scaleMatrix)
-
-        ent:SetPos(view.ToVM(worldPos, info))
-        ent:SetupBones()
-        ent:DrawModel()
-        ent:SetPos(worldPos)
     end
 
     SandSwep.DrawViewmodelBelts(wep, vm, info)

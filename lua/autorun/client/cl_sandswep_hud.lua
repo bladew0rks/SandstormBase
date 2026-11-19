@@ -443,7 +443,7 @@ end
 
 local fmList = {}
 local FM_RANK = { auto = 1, burst = 2, semi = 3 }
-local fmModes, fmFrame, fmWep
+local fmModes, fmWep, fmAtt
 local function FireModeOrder(a, b)
     local rankA, rankB = FM_RANK[fmModes[a]] or 2, FM_RANK[fmModes[b]] or 2
     if rankA ~= rankB then return rankA < rankB end
@@ -451,9 +451,9 @@ local function FireModeOrder(a, b)
     return a > b
 end
 local function FireModeList(wep)
-    local frame = FrameNumber()
-    if fmFrame == frame and fmWep == wep then return fmList, fmModes end
-    fmFrame, fmWep = frame, wep
+    local att = wep.GetAttData and wep:GetAttData() or ""
+    if fmWep == wep and fmAtt == att then return fmList, fmModes end
+    fmWep, fmAtt = wep, att
 
     for i = #fmList, 1, -1 do fmList[i] = nil end
 
@@ -631,8 +631,6 @@ local cvDrawHUD = GetConVar("cl_drawhud")
 local function PaintHUD()
     if not cvEnable:GetBool() then return end
     if not cvDrawHUD:GetBool() then return end
-
-    UpdateScale()
 
     local wep = ActiveSandSwep()
     if not (IsValid(wep) and wep.IsReloading and wep.GetFireModeIndex) then

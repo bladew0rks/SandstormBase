@@ -50,7 +50,12 @@ local function ApplyPose(pos, ang, axes, offset, rot, t)
     ang:RotateAroundAxis(right, rot.p * t)
     ang:RotateAroundAxis(up, rot.y * t)
     ang:RotateAroundAxis(fwd, rot.r * t)
-    return pos + right * (offset.x * t) + fwd * (offset.y * t) + up * (offset.z * t)
+    local ox, oy, oz = offset.x * t, offset.y * t, offset.z * t
+    pos:SetUnpacked(
+        pos.x + right.x * ox + fwd.x * oy + up.x * oz,
+        pos.y + right.y * ox + fwd.y * oy + up.y * oz,
+        pos.z + right.z * ox + fwd.z * oy + up.z * oz)
+    return pos
 end
 
 local function RotateLocal(ang, pitch, roll, yaw)
@@ -94,16 +99,17 @@ local function AddWaves(clip, phase, out, weight, channels)
     end
 end
 
-local function SampleLoop(clip, time)
-    local out = { 0, 0, 0, 0, 0, 0 }
+local function SampleLoop(clip, time, out)
+    out = out or { 0, 0, 0, 0, 0, 0 }
+    for c = 1, 6 do out[c] = 0 end
     AddWaves(clip, (time / clip.Length) % 1, out, 1)
     return out
 end
 
-local function SampleCurve(clip, time)
+local function SampleCurve(clip, time, out)
     local t = math.Clamp(time / clip.Length, 0, 1)
 
-    local out = {}
+    out = out or {}
     for c, name in ipairs(MOTION_CHANNELS) do
         out[c] = CurveValue(clip[name], t)
     end
@@ -157,8 +163,19 @@ function SWEP:GetBlendedSight()
     end
 
     local blend = math.min(1, VisualFrameTime() / math.max(self.SightSwitchTime, 0.01) * SIGHT_SWITCH_EASE)
-    cur.Pos = LerpVector(blend, cur.Pos, targetPos)
-    cur.Ang = LerpAngle(blend, cur.Ang, targetAng)
+    local cp, ca = cur.Pos, cur.Ang
+    if cp.x ~= targetPos.x or cp.y ~= targetPos.y or cp.z ~= targetPos.z then
+        cp:SetUnpacked(
+            cp.x + (targetPos.x - cp.x) * blend,
+            cp.y + (targetPos.y - cp.y) * blend,
+            cp.z + (targetPos.z - cp.z) * blend)
+    end
+    if ca.p ~= targetAng.p or ca.y ~= targetAng.y or ca.r ~= targetAng.r then
+        ca:SetUnpacked(
+            ca.p + math.AngleDifference(targetAng.p, ca.p) * blend,
+            ca.y + math.AngleDifference(targetAng.y, ca.y) * blend,
+            ca.r + math.AngleDifference(targetAng.r, ca.r) * blend)
+    end
 
     return cur, sight
 end
@@ -171,14 +188,10 @@ local function UpdateWalkState(wep, bob, ply, gait)
     local dt = VisualFrameTime()
     local vel = ply:GetVelocity()
 
-    local fwd = ply:GetForward()
-    fwd.z = 0
-    fwd:Normalize()
-    local right = ply:GetRight()
-    right.z = 0
-    right:Normalize()
-
-    local velFwd, velRight = vel:Dot(fwd), vel:Dot(right)
+    local yawRad = math.rad(ply:EyeAngles().y)
+    local cosY, sinY = math.cos(yawRad), math.sin(yawRad)
+    local velFwd = vel.x * cosY + vel.y * sinY
+    local velRight = vel.x * sinY - vel.y * cosY
     local speed = math.sqrt(velFwd * velFwd + velRight * velRight)
     local refSpeed = math.max(wep.WalkBobRefSpeed, 1)
     local grounded = ply:OnGround() and ply:GetMoveType() == MOVETYPE_WALK
@@ -280,7 +293,8 @@ local function AddBreathing(wep, motion, out, dt, aimT, sprintVis)
 end
 
 local function SwitchJump(jump, state)
-    jump.from = jump.cur or { 0, 0, 0, 0, 0, 0 }
+    local from, cur = jump.from, jump.cur
+    for c = 1, 6 do from[c] = cur[c] end
     jump.state, jump.t, jump.fade = state, 0, 0
 end
 
@@ -306,20 +320,22 @@ local function UpdateJumpState(jump, ply, dt)
 end
 
 local function SampleJump(jump, motion)
+    local cur = jump.cur
     if jump.state == JUMP_START then
-        local cur = SampleCurve(motion.JumpStart, jump.t)
+        SampleCurve(motion.JumpStart, jump.t, cur)
         if jump.t >= motion.JumpStart.Length then SwitchJump(jump, JUMP_AIR) end
         return cur
     elseif jump.state == JUMP_AIR then
-        return SampleLoop(motion.JumpIdle, jump.t)
+        return SampleLoop(motion.JumpIdle, jump.t, cur)
     elseif jump.state == JUMP_LAND then
-        local cur = SampleCurve(motion.JumpEnd, jump.t)
+        SampleCurve(motion.JumpEnd, jump.t, cur)
         for c = 1, 6 do cur[c] = cur[c] * jump.land end
         if jump.t >= motion.JumpEnd.Length then jump.state = JUMP_NONE end
         return cur
     end
 
-    return { 0, 0, 0, 0, 0, 0 }
+    for c = 1, 6 do cur[c] = 0 end
+    return cur
 end
 
 local function AddJumpMotion(wep, motion, out, ply, dt, aimT, sprintVis)
@@ -332,12 +348,18 @@ local function AddJumpMotion(wep, motion, out, ply, dt, aimT, sprintVis)
             vz = 0,
             fade = 1,
             from = { 0, 0, 0, 0, 0, 0 },
+            cur = { 0, 0, 0, 0, 0, 0 },
             land = 1,
         }
         wep._jump = jump
     end
 
     UpdateJumpState(jump, ply, dt)
+
+    if jump.state == JUMP_NONE and jump.fade >= 1 then
+        wep._jumpCam = nil
+        return false
+    end
 
     jump.t = jump.t + dt
     jump.fade = math.min(1, jump.fade + dt / JUMP_FADE)
@@ -347,7 +369,6 @@ local function AddJumpMotion(wep, motion, out, ply, dt, aimT, sprintVis)
         local blend = Smoothstep(jump.fade)
         for c = 1, 6 do cur[c] = jump.from[c] + (cur[c] - jump.from[c]) * blend end
     end
-    jump.cur = cur
 
     local weight = wep.JumpMotionScale * Lerp(aimT, 1, wep.JumpMotionAimScale) * (1 - sprintVis * JUMP_SPRINT_DAMPEN)
     local added = false
@@ -357,7 +378,14 @@ local function AddJumpMotion(wep, motion, out, ply, dt, aimT, sprintVis)
     end
 
     local camWeight = (wep.JumpCameraScale or 0) * weight
-    wep._jumpCam = camWeight > 0.001 and { cur[4] * camWeight, cur[5] * camWeight, cur[6] * camWeight } or nil
+    if camWeight > 0.001 then
+        local cam = wep._jumpCamBuf or {}
+        wep._jumpCamBuf = cam
+        cam[1], cam[2], cam[3] = cur[4] * camWeight, cur[5] * camWeight, cur[6] * camWeight
+        wep._jumpCam = cam
+    else
+        wep._jumpCam = nil
+    end
     return added
 end
 
@@ -371,7 +399,14 @@ function SWEP:GetBodyMotion(aimT, sprintVis)
     self._bodyFrame = frameNum
 
     local dt = VisualFrameTime()
-    local out = { 0, 0, 0, 0, 0, 0 }
+    local out = self._bodyBuf
+    if not out then
+        out = { 0, 0, 0, 0, 0, 0 }
+        self._bodyBuf = out
+    else
+        for c = 1, 6 do out[c] = 0 end
+    end
+
     local any = false
     if motion.Breath and AddBreathing(self, motion, out, dt, aimT, sprintVis) then any = true end
 
@@ -497,6 +532,8 @@ local function ApplyAimPoses(wep, pos, ang, axes, blended, aimRaw, aimT, dev)
     return pos
 end
 
+local vmPosScratch, vmAngScratch = Vector(), Angle()
+
 function SWEP:ComputeViewModelPosition(pos, ang)
     local inAng = ang
     local eyePos = pos
@@ -536,7 +573,10 @@ function SWEP:ComputeViewModelPosition(pos, ang)
         return pos, ang
     end
 
-    local newAng = Angle(ang.p, ang.y, ang.r)
+    vmPosScratch:Set(pos)
+    pos = vmPosScratch
+    vmAngScratch:SetUnpacked(ang.p, ang.y, ang.r)
+    local newAng = vmAngScratch
     local axes = self._vmAxes or {}
     self._vmAxes = axes
     axes[1], axes[2], axes[3] = newAng:Right(), newAng:Forward(), newAng:Up()
@@ -561,13 +601,15 @@ function SWEP:ComputeViewModelPosition(pos, ang)
             newAng:RotateAroundAxis(axes[1], rot.p * pointT)
             newAng:RotateAroundAxis(axes[3], rot.y * pointT)
             newAng:RotateAroundAxis(axes[2], rot.r * pointT)
-            pos = LocalToWorld(localPos, angle_zero, eyePos, newAng)
+            local pPos = LocalToWorld(localPos, angle_zero, eyePos, newAng)
 
             local offset = self.PointAimPos
-            pos = pos
-                + newAng:Right() * (offset.x * pointT)
-                + newAng:Forward() * (offset.y * pointT)
-                + newAng:Up() * (offset.z * pointT)
+            local pr, pf, pu = newAng:Right(), newAng:Forward(), newAng:Up()
+            local ox, oy, oz = offset.x * pointT, offset.y * pointT, offset.z * pointT
+            pos:SetUnpacked(
+                pPos.x + pr.x * ox + pf.x * oy + pu.x * oz,
+                pPos.y + pr.y * ox + pf.y * oy + pu.y * oz,
+                pPos.z + pr.z * ox + pf.z * oy + pu.z * oz)
         end
     end
 
@@ -587,6 +629,8 @@ function SWEP:ComputeViewModelPosition(pos, ang)
 
     if wallBack > 0 or wallTilt > 0 then
         pos = wall.Apply(pos, newAng, inAng, wallBack, wallTilt)
+        vmPosScratch:Set(pos)
+        pos = vmPosScratch
     end
 
     if bob then
@@ -594,7 +638,11 @@ function SWEP:ComputeViewModelPosition(pos, ang)
         newAng:RotateAroundAxis(right, bob[4])
         newAng:RotateAroundAxis(fwd, bob[5])
         newAng:RotateAroundAxis(up, bob[6])
-        pos = pos + right * bob[1] + fwd * bob[2] + up * bob[3]
+        local bx, by, bz = bob[1], bob[2], bob[3]
+        pos:SetUnpacked(
+            pos.x + right.x * bx + fwd.x * by + up.x * bz,
+            pos.y + right.y * bx + fwd.y * by + up.y * bz,
+            pos.z + right.z * bx + fwd.z * by + up.z * bz)
     end
 
     return pos, newAng
@@ -631,6 +679,8 @@ local function MoveDeadzone(wep, offset, deltaPitch, deltaYaw)
     if reach > 1 then offset.p, offset.y = offset.p / reach, offset.y / reach end
 end
 
+local dzLeadScratch = Angle()
+
 function SWEP:UpdateDeadzone(ply)
     local frameNum = FrameNumber()
     if self._dzFrame == frameNum then return end
@@ -641,17 +691,26 @@ function SWEP:UpdateDeadzone(ply)
 
     local eye = ply:EyeAngles()
     local last = self._dzLast
-    self._dzLast = Angle(eye.p, eye.y, 0)
-
-    if not continuous or not last or not self._dzOff then
+    if not last then
+        last = Angle(eye.p, eye.y, 0)
+        self._dzLast = last
         self._dzOff = Angle(0, 0, 0)
         self._dzVM = Angle(0, 0, 0)
         return
     end
 
+    local lastP, lastY = last.p, last.y
+    last:SetUnpacked(eye.p, eye.y, 0)
+
+    if not continuous or not self._dzOff then
+        if self._dzOff then self._dzOff:Zero() else self._dzOff = Angle(0, 0, 0) end
+        if self._dzVM then self._dzVM:Zero() else self._dzVM = Angle(0, 0, 0) end
+        return
+    end
+
     local offset = self._dzOff
-    local deltaPitch = eye.p - last.p
-    local deltaYaw = math.AngleDifference(eye.y, last.y)
+    local deltaPitch = eye.p - lastP
+    local deltaYaw = math.AngleDifference(eye.y, lastY)
     local prevPitch, prevYaw = offset.p, offset.y
     local snapped = math.abs(deltaPitch) > DEADZONE_SNAP_DEG or math.abs(deltaYaw) > DEADZONE_SNAP_DEG
 
@@ -671,9 +730,10 @@ function SWEP:UpdateDeadzone(ply)
     self._dzLeadP, self._dzLeadY = leadPitch, leadYaw
 
     if leadPitch ~= 0 or leadYaw ~= 0 then
-        local lead = Angle(math.Clamp(eye.p + leadPitch, -89, 89), eye.y + leadYaw, eye.r)
-        ply:SetEyeAngles(lead)
-        self._dzLast = Angle(lead.p, lead.y, 0)
+        local leadP, leadY = math.Clamp(eye.p + leadPitch, -89, 89), eye.y + leadYaw
+        dzLeadScratch:SetUnpacked(leadP, leadY, eye.r)
+        ply:SetEyeAngles(dzLeadScratch)
+        last:SetUnpacked(leadP, leadY, 0)
     end
 
     local vm = self._dzVM
@@ -728,12 +788,22 @@ end
 
 local camRot, camRotT, parentT, camDelta = Matrix(), Matrix(), Matrix(), Matrix()
 
-local function MeasureCameraBone(vm)
-    local cam = SandSwep.BoneId(vm, "b_camera")
-    if not cam then return end
+local function CameraBoneIds(vm)
+    local model = vm:GetModel()
+    local ids = vm.SandSwepCamBoneIds
+    if ids and ids.model == model then return ids.cam, ids.parent end
 
-    local parent = vm:GetBoneParent(cam)
-    if not parent or parent < 0 then return end
+    local cam = SandSwep.BoneId(vm, "b_camera")
+    local parent = cam and vm:GetBoneParent(cam)
+    if not parent or parent < 0 then cam, parent = false, false end
+
+    vm.SandSwepCamBoneIds = { model = model, cam = cam or false, parent = parent or false }
+    return cam, parent
+end
+
+local function MeasureCameraBone(vm)
+    local cam, parent = CameraBoneIds(vm)
+    if not cam then return end
 
     local camMat, parentMat = vm:GetBoneMatrix(cam), vm:GetBoneMatrix(parent)
     if not camMat or not parentMat then return end
@@ -766,9 +836,20 @@ local function MeasureCameraBone(vm)
     return -aboutLeft, aboutForward, aboutUp
 end
 
+local camBoneFrame
+
 hook.Add("PostDrawViewModel", "SandSwep_CameraBone", function(vm, ply, wep)
     if ply ~= LocalPlayer() or not IsValid(wep) or not wep.IsSandSwep then return end
     if not IsValid(vm) or vm ~= ply:GetViewModel(0) then return end
+
+    local frame = FrameNumber()
+    if camBoneFrame == frame then return end
+    camBoneFrame = frame
+
+    if (wep.CameraAnimScale or 0) <= 0 or cvCamAnim:GetFloat() <= 0 then
+        wep._camBone = nil
+        return
+    end
 
     local right, fwd, up = MeasureCameraBone(vm)
     if not right then
@@ -778,7 +859,7 @@ hook.Add("PostDrawViewModel", "SandSwep_CameraBone", function(vm, ply, wep)
 
     wep._camBone = wep._camBone or {}
     local bone = wep._camBone
-    bone[1], bone[2], bone[3], bone.frame = right, fwd, up, FrameNumber()
+    bone[1], bone[2], bone[3], bone.frame = right, fwd, up, frame
     bone.seq = Developer() and string.lower(vm:GetSequenceName(vm:GetSequence()) or "") or nil
 end)
 
@@ -796,21 +877,61 @@ function SWEP:UpdateCameraAnim()
     end
 
     local bone = self._camBone
-    local live = bone and FrameNumber() - bone.frame <= 2
+    local live = bone and frameNum - bone.frame <= 2
     local right, fwd, up = live and bone[1], live and bone[2], live and bone[3]
     self._camSeq = live and bone.seq or nil
 
-    local gain = scale * Lerp(Smoothstep(self:GetAimProgress()), 1, self.CameraAnimAimScale or 1)
-    local target = right and Vector(right * gain, fwd * gain, up * gain) or Vector(0, 0, 0)
+    local tx, ty, tz = 0, 0, 0
+    if right and (right ~= 0 or fwd ~= 0 or up ~= 0) then
+        local gain = scale * Lerp(Smoothstep(self:GetAimProgress()), 1, self.CameraAnimAimScale or 1)
+        tx, ty, tz = right * gain, fwd * gain, up * gain
+    end
 
-    local cur = LerpVector(math.min(1, VisualFrameTime() * CAMERA_ANIM_EASE), self._camLocal or target, target)
-    self._camLocal = cur
-    if cur:Length() > CAMERA_ANIM_MAX then cur = cur:GetNormalized() * CAMERA_ANIM_MAX end
+    local cur = self._camLocal
+    if not cur then
+        if tx == 0 and ty == 0 and tz == 0 then
+            self._camDebug = 0
+            return
+        end
+        cur = Vector(tx, ty, tz)
+        self._camLocal = cur
+    elseif tx == 0 and ty == 0 and tz == 0 and cur:LengthSqr() < 1e-8 then
+        cur:SetUnpacked(0, 0, 0)
+        self._camDebug = 0
+        return
+    else
+        local frac = math.min(1, VisualFrameTime() * CAMERA_ANIM_EASE)
+        cur:SetUnpacked(
+            cur.x + (tx - cur.x) * frac,
+            cur.y + (ty - cur.y) * frac,
+            cur.z + (tz - cur.z) * frac)
+    end
+
+    local cx, cy, cz = cur.x, cur.y, cur.z
+    local lenSqr = cx * cx + cy * cy + cz * cz
+    if lenSqr > CAMERA_ANIM_MAX * CAMERA_ANIM_MAX then
+        local k = CAMERA_ANIM_MAX / math.sqrt(lenSqr)
+        cx, cy, cz = cx * k, cy * k, cz * k
+    end
+
+    if lenSqr <= 0.0001 then
+        self._camDebug = math.sqrt(lenSqr)
+        return
+    end
 
     local eye = ply:EyeAngles()
-    local world = eye:Right() * cur.x + eye:Forward() * cur.y + eye:Up() * cur.z
+    local er, ef, eu = eye:Right(), eye:Forward(), eye:Up()
+    local world = self._camAnimWBuf
+    if not world then
+        world = Vector()
+        self._camAnimWBuf = world
+    end
+    world:SetUnpacked(
+        er.x * cx + ef.x * cy + eu.x * cz,
+        er.y * cx + ef.y * cy + eu.y * cz,
+        er.z * cx + ef.z * cy + eu.z * cz)
     self._camDebug = world:Length()
-    if world:LengthSqr() > 0.0001 then self._camAnimW = world end
+    self._camAnimW = world
 end
 
 hook.Add("HUDPaint", "SandSwep_CamDebug", function()
@@ -891,9 +1012,17 @@ function SWEP:CalcView(ply, pos, ang, fov)
 
     local pitch = math.Clamp(ang.p + (self._dzLeadP or 0) - offset.p, -89, 89)
     local yaw = ang.y + (self._dzLeadY or 0) - offset.y
-    local viewAng = ApplyCameraMotion(self, Angle(pitch, yaw, ang.r))
+    local dzCam = self._dzCam
+    if not dzCam then
+        dzCam = Angle(pitch, yaw, ang.r)
+        self._dzCam = dzCam
+    else
+        dzCam:SetUnpacked(pitch, yaw, ang.r)
+    end
+    local viewAng = ApplyCameraMotion(self, dzCam)
+    if viewAng ~= dzCam then dzCam:SetUnpacked(viewAng.p, viewAng.y, viewAng.r) end
 
-    self._dzCam, self._dzCamFrame = Angle(viewAng.p, viewAng.y, viewAng.r), FrameNumber()
+    self._dzCamFrame = FrameNumber()
     return pos, viewAng, fov
 end
 

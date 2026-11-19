@@ -22,19 +22,25 @@ function WALL.Setting(name)
 end
 
 local hull = Vector(2, 2, 2)
+local endposScratch = Vector()
 local result = {}
 local trace = {
     mins = -hull,
     maxs = hull,
+    endpos = endposScratch,
     mask = bit.band(MASK_SOLID, bit.bnot(CONTENTS_MONSTER)),
     output = result,
 }
 
 function WALL.Penetration(ply, eyePos, eyeAng, reach)
     local length = reach + WALL.Margin
+    local fwd = eyeAng:Forward()
 
     trace.start = eyePos
-    trace.endpos = eyePos + eyeAng:Forward() * length
+    endposScratch:SetUnpacked(
+        eyePos.x + fwd.x * length,
+        eyePos.y + fwd.y * length,
+        eyePos.z + fwd.z * length)
     trace.filter = ply
     util.TraceHull(trace)
 
@@ -108,7 +114,14 @@ function WALL.TiltDegrees(tilt)
     return WALL.Tilt.p * tilt
 end
 
+local WALL_TRACE_INTERVAL = 1 / 60
+local nextWallTrace = 0
+
 hook.Add("Think", "SandSwep_WallTrace", function()
+    local now = RealTime()
+    if now < nextWallTrace then return end
+    nextWallTrace = now + WALL_TRACE_INTERVAL
+
     local ply = LocalPlayer()
     if not IsValid(ply) then return end
 

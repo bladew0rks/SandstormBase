@@ -690,7 +690,16 @@ local function DrawLiveBelt(wep, vm, info)
 end
 
 function SandSwep.DrawViewmodelBelts(wep, vm, info)
-    if IsValid(wep) and istable(wep.HangingBelt) then DrawHangingBelt(wep, vm, info) end
-    if IsValid(wep) and istable(wep.LiveBelt) then DrawLiveBelt(wep, vm, info) end
-    DrawYoungBelts(info)
+    local hanging = IsValid(wep) and istable(wep.HangingBelt)
+    local live = IsValid(wep) and istable(wep.LiveBelt)
+    local hasYoung = false
+    for _, belt in ipairs(dropped) do
+        if belt.vmStage then hasYoung = true break end
+    end
+    if not (hanging or live or hasYoung) then return end
+
+    info = info or SandSwep.VMView.ViewInfo(wep, true)
+    if hanging then DrawHangingBelt(wep, vm, info) end
+    if live then DrawLiveBelt(wep, vm, info) end
+    if hasYoung then DrawYoungBelts(info) end
 end

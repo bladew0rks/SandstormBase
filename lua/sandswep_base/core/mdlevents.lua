@@ -105,8 +105,10 @@ function Parse(model, depth)
     return seqs
 end
 
+local EMPTY_SEQS = {}
+
 function SandSwep.GetModelSequences(model)
-    if not isstring(model) or model == "" then return {} end
+    if not isstring(model) or model == "" then return EMPTY_SEQS end
 
     local seqs = cache[model]
     if not seqs then

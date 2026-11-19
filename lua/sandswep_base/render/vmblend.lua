@@ -190,18 +190,25 @@ local function CaptureRaw(vm, mats, numBones)
 end
 
 function SWEP:VMBoneBlend(vm, numBones)
-    local snap = Snapshot(self, vm)
+    local frame = FrameNumber()
+    local snap = self._vmSnap
+    if not self._vmBlend and not self._seqStep and snap and snap.checkedFrame == frame and snap.seq == vm:GetSequence() then
+        return
+    end
+
+    snap = Snapshot(self, vm)
     if self._seqStep then
         self._vmBlend = nil
-        snap.seq, snap.valid = vm:GetSequence(), nil
+        snap.seq, snap.valid, snap.checkedFrame = vm:GetSequence(), nil, nil
         return
     end
 
     TrackChanges(self, vm, snap)
     local blend, weight = BlendWeight(self, snap)
 
-    local frame, now = FrameNumber(), RealTime()
+    local now = RealTime()
     local capture = snap.frame ~= frame and (not snap.at or now - snap.at >= CAPTURE_INTERVAL)
+    snap.checkedFrame = frame
     if not capture and not blend then return end
     if capture then snap.frame, snap.at = frame, now end
 
@@ -258,14 +265,15 @@ function SWEP:HookBoneBlend(vm)
 
         local ply = ent:GetOwner()
         local wep = IsValid(ply) and ply.GetActiveWeapon and ply:GetActiveWeapon()
+        if not IsValid(wep) or not wep.IsSandSwep then return end
 
-        if IsValid(wep) and wep.VMGrip then wep:VMGrip(ent) end
-        if IsValid(wep) and wep.VMHandPose then wep:VMHandPose(ent) end
-        if IsValid(wep) and wep.VMTubeSelector then wep:VMTubeSelector(ent) end
-        if IsValid(wep) and wep.VMBoneBlend then wep:VMBoneBlend(ent, numBones) end
-        if IsValid(wep) and wep.VMMagRounds then wep:VMMagRounds(ent) end
-        if IsValid(wep) and wep.VMVManip then wep:VMVManip(ent) end
-        if IsValid(wep) and wep.VMForearmFit then wep:VMForearmFit(ent) end
+        if wep.VMGrip then wep:VMGrip(ent) end
+        if wep.VMHandPose then wep:VMHandPose(ent) end
+        if wep.VMTubeSelector then wep:VMTubeSelector(ent) end
+        if wep.VMBoneBlend then wep:VMBoneBlend(ent, numBones) end
+        if wep.VMMagRounds then wep:VMMagRounds(ent) end
+        if wep.VMVManip then wep:VMVManip(ent) end
+        if wep.VMForearmFit then wep:VMForearmFit(ent) end
     end)
 end
 

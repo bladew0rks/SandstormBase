@@ -3,31 +3,38 @@ if not CLIENT then return end
 local AXIS_X, AXIS_Y, AXIS_Z = Vector(1, 0, 0), Vector(0, 1, 0), Vector(0, 0, 1)
 
 local renderView, renderFrame, renderWep
+local nonRenderView = {}
 
 local function ViewInfo(wep, inRender)
     local frame = FrameNumber()
     if inRender and renderFrame == frame and renderWep == wep then return renderView end
 
     local owner = IsValid(wep) and wep:GetOwner()
+    local setup = inRender and render.GetViewSetup and render.GetViewSetup()
     local origin, ang
-    if inRender then
+    if setup and setup.origin and setup.angles then
+        origin, ang = setup.origin, setup.angles
+    elseif inRender then
         origin, ang = EyePos(), EyeAngles()
     else
         origin = IsValid(owner) and owner:EyePos() or EyePos()
         ang = IsValid(owner) and owner:EyeAngles() or EyeAngles()
     end
 
-    local fov = IsValid(owner) and owner:GetFOV() or 75
-    local vmFov = (IsValid(wep) and wep.ViewModelFOV) or 62
-    local setup = inRender and render.GetViewSetup and render.GetViewSetup()
-    if setup and setup.fov and setup.fovviewmodel then fov, vmFov = setup.fov, setup.fovviewmodel end
+    local fov = (setup and setup.fov) or (IsValid(owner) and owner:GetFOV()) or 75
+    local vmFov = (setup and setup.fovviewmodel) or (IsValid(wep) and wep.ViewModelFOV) or 62
 
     local scale = math.tan(math.rad(fov) * 0.5) / math.max(math.tan(math.rad(vmFov) * 0.5), 0.01)
 
-    local view = inRender and renderView or {}
-    view.origin, view.ang, view.fwd, view.k = origin, ang, ang:Forward(), scale
-    if inRender then renderView, renderFrame, renderWep = view, frame, wep end
+    local view
+    if inRender then
+        view = renderView or {}
+        renderView, renderFrame, renderWep = view, frame, wep
+    else
+        view = nonRenderView
+    end
 
+    view.origin, view.ang, view.fwd, view.k = origin, ang, ang:Forward(), scale
     return view
 end
 

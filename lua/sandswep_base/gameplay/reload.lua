@@ -307,6 +307,35 @@ local function ReloadDebug(wep, fmt, ...)
     print(string.format("[sandswep %s %s] " .. fmt, SERVER and "SV" or "CL", wep:GetClass(), ...))
 end
 
+local RELEASE_SOUNDS = { "slide_?release", "slide_?forward", "bolt_?release", "bolt_?forward", "handle_?release", "handle_?forward" }
+
+local function IsReleaseSound(name)
+    if not isstring(name) then return false end
+
+    name = string.lower(name)
+    for _, pattern in ipairs(RELEASE_SOUNDS) do
+        if string.find(name, pattern) then return true end
+    end
+
+    return false
+end
+
+function SWEP:GetBoltHomeTime(soundSet, animName)
+    local entry = self:GetAnimEntry(animName)
+    local after = entry and entry.MagIn or 0
+
+    for _, events in ipairs({ self:GetSoundEvents(soundSet) or {}, self:GetModelSoundEvents(animName) or {} }) do
+        local home
+        for _, event in ipairs(events) do
+            local t = event.t or 0
+            if t >= after and IsReleaseSound(event.s) then home = math.max(home or 0, t) end
+        end
+        if home then return home end
+    end
+
+    return entry and entry.BoltAt
+end
+
 function SWEP:InterruptReload()
     if not self:IsReloading() then return end
     if self:GetReloadState() == RELOAD_INSERT then return self:InterruptInsertReload() end
@@ -316,6 +345,15 @@ function SWEP:InterruptReload()
     local animTime = self:GetReloadAnimTime()
 
     if state == RELOAD_BOLT then                     -- stopped again during the bolt release
+        local home = self:GetBoltHomeTime("reload_bolt", "reload_boltrelease")
+        if home and animTime >= home then
+            self:FinishReload()
+            self:StopSoundSet()
+            self:SetNextPrimaryFire(CurTime())
+            self:SetVMPlaybackRate(1)
+            return
+        end
+
         self:SetReloadSaveTime(animTime)
         return self:CancelReload()
     end
@@ -336,8 +374,10 @@ function SWEP:InterruptReload()
     if animTime >= entry.MagIn then
         local empty = self:GetReloadEmpty()
         local boltEntry = empty and self:GetAnimEntry("reload_empty")
+        local quick = state == RELOAD_QUICK
+        local home = empty and self:GetBoltHomeTime(quick and "reload_quick_empty" or "reload_empty", quick and "reload_speed_empty" or "reload_empty")
         self:FinishReload()
-        if empty and boltEntry and (boltEntry.BoltAt or self:HasAnim("reload_boltrelease")) then
+        if empty and boltEntry and (boltEntry.BoltAt or self:HasAnim("reload_boltrelease")) and not (home and animTime >= home) then
             self:SetReloadStage(STAGE_BOLT)
             self:SetReloadSaveTime(saveTime)
         end

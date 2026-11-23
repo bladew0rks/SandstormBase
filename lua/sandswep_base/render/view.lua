@@ -604,6 +604,14 @@ local function VMKick(wep, aimT)
         plays[#plays + 1] = { start = now, curve = list[math.random(#list)], scale = mult, mirror = mirror,
             rot = aiming and cfg.AimRotScale or cfg.RotScale or 1, pos = aiming and cfg.AimPosScale or cfg.PosScale or 1 }
 
+        local shake = cfg.Shake
+        if shake then
+            local amt = mult * (aiming and (shake.AimMult or 0.5) or 1)
+            st.shakeAmp = math.min((st.shakeAmp or 0) + amt, amt * 2)
+            st.shakeT = 0
+            st.shakePh = { math.Rand(0, 6.283), math.Rand(0, 6.283), math.Rand(0, 6.283) }
+        end
+
         if acc then
             st.heat = math.min(st.heat + mult, acc.Max or 5)
             st.drift = math.Clamp(st.drift + math.Rand(-1, 1) * mult, -(acc.Max or 5), acc.Max or 5)
@@ -625,7 +633,9 @@ local function VMKick(wep, aimT)
 
     local plays = st.plays
     local warm = acc and st.heatC > 0
-    if #plays == 0 and not warm then return false end
+    local shake = cfg.Shake
+    local shaking = shake and (st.shakeAmp or 0) > 0.002
+    if #plays == 0 and not warm and not shaking then return false end
 
     for k = 1, 6 do kickSum[k] = 0 end
     local fps = set.FPS or 30
@@ -643,6 +653,20 @@ local function VMKick(wep, aimT)
                 kickSum[4] = x - (kickSum[4] - x)
             end
         end
+    end
+
+    if shaking then
+        local dt = math.min(RealFrameTime(), 0.1)
+        if st.shakeFrame ~= FrameNumber() then
+            st.shakeFrame = FrameNumber()
+            st.shakeT = (st.shakeT or 0) + dt
+            st.shakeAmp = st.shakeAmp * math.exp(-(shake.Decay or 14) * dt)
+        end
+        local w = (shake.Freq or 26) * 6.283 * st.shakeT
+        local a, ph = st.shakeAmp, st.shakePh
+        kickSum[1] = kickSum[1] + a * (shake.Pitch or 0.6) * math.sin(w * 1.07 + ph[1])
+        kickSum[2] = kickSum[2] + a * (shake.Yaw or 0.8) * math.sin(w * 0.93 + ph[2])
+        kickSum[3] = kickSum[3] + a * (shake.Roll or 2) * math.sin(w + ph[3])
     end
 
     if warm then

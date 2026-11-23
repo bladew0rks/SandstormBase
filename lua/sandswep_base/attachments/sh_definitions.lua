@@ -811,36 +811,28 @@ SandSwep.RegisterAttachment("mag_mg3_100", {
     Stats = { AimTime = 1.08, AimMoveSpeed = 0.95 },
 })
 
-SandSwep.RegisterAttachment("mag_pkm_200", {
-    Name = "200rd Loose Belt", Slot = "magazine",
-    Bodygroups = { Mag = 1 },
-    MagSize = 200,
-    LiveBelt = true,
-    Stats = { AimTime = 1.04 },
-})
-SandSwep.RegisterAttachment("mag_m240_200", {
-    Name = "200rd Loose Belt", Slot = "magazine",
-    Bodygroups = { Mag = 2, Mag_Attach = 0 },
-    MagSize = 200,
-    AnimSet = "m240box",
-    LiveBelt = true,
-    Stats = { AimTime = 1.04 },
-})
-SandSwep.RegisterAttachment("mag_mg3_200", {
-    Name = "200rd Loose Belt", Slot = "magazine",
-    Bodygroups = { Mag = 2 },
-    MagSize = 200,
-    AnimSet = "ext",
-    LiveBelt = true,
-    Stats = { AimTime = 1.04 },
-})
-
 SandSwep.RegisterAttachment("mag_m60_100", {
     Name = "100rd Belt Box", Slot = "magazine",
     Bodygroups = { Mag = 1 },
     MagSize = 100,
     AnimSet = "ext",
     Stats = { AimTime = 1.08, AimMoveSpeed = 0.95 },
+})
+
+SandSwep.RegisterAttachment("mag_m250_100", {
+    Name = "100rd Belt Box", Slot = "magazine",
+    Bodygroups = { Mag = 1 },
+    MagSize = 100,
+    AnimSet = "ext",
+    Stats = { AimTime = 1.08, AimMoveSpeed = 0.95 },
+})
+
+SandSwep.RegisterAttachment("muzzle_m250_supp", {
+    Name = "M250 Suppressor", Slot = "muzzle",
+    Bodygroups = { muzzle = 1 },
+    Suppressor = true,
+    MuzzleAttachment = "muzzle_supp",
+    Stats = { Recoil = 0.9, AimTime = 1.05 },
 })
 
 SandSwep.RegisterAttachment("mag_rpk_40", {

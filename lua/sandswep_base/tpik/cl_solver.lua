@@ -764,6 +764,7 @@ local HAND_DROP_END = 6
 local TWIST_WEIGHT = 0.5
 local TWIST_LIMIT = 180
 local TWIST_RESET_FRAMES = 5
+local cvUlnaWeight = CreateClientConVar("cl_sandswep_tpik_ulna_twist", "0.5", true, false, "Share of the hand roll carried by the forearm twist bone", 0, 1)
 
 local function alignForward(ang, fromDir, toDir)
     local from, to = fromDir:GetNormalized(), toDir:GetNormalized()
@@ -842,8 +843,9 @@ local function twistToward(side, ang, axisDir, targetUp)
 
     twist = mathClamp(twist, -TWIST_LIMIT, TWIST_LIMIT)
     side.poleTwist, side.poleTwistFrame = twist, frame
+    side.ulnaTwist = twist
 
-    ang:RotateAroundAxis(axis, twist * TWIST_WEIGHT)
+    ang:RotateAroundAxis(axis, twist * cvUlnaWeight:GetFloat())
 end
 
 local dump
@@ -943,7 +945,7 @@ local function solveArmPole(ply, side, bones, outward, limbUpper, limbFore, scal
             elbow = dumpVec(elbowPos), hand = dumpVec(handPos), bodyDir = dumpVec(bodyDir), bodyWeight = bodyWeight,
             upperAnim = dumpAng(upperMat:GetAngles()), upperNew = dumpAng(upperAng),
             foreAnim = dumpAng(foreMat:GetAngles()), foreNew = dumpAng(foreAng), handAng = dumpAng(handMat:GetAngles()),
-            twist = side.poleTwist, limbs = { limbUpper * scale, limbFore * scale },
+            twist = side.poleTwist, ulnaTwist = side.ulnaTwist, limbs = { limbUpper * scale, limbFore * scale },
         })
     end
 

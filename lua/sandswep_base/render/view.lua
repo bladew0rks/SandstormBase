@@ -536,7 +536,67 @@ local function ApplyAimPoses(wep, pos, ang, axes, blended, aimRaw, aimT, dev)
 end
 
 local vmPosScratch, vmAngScratch = Vector(), Angle()
+local kickPivot = Vector()
 local userOffset = Vector()
+local KICK_MAX_PLAYS = 8
+local kickSum = { 0, 0, 0, 0, 0, 0 }
+
+local function CatmullRom(p0, p1, p2, p3, t)
+    local t2, t3 = t * t, t * t * t
+    return 0.5 * (2 * p1 + (p2 - p0) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 + (3 * p1 - p0 - 3 * p2 + p3) * t3)
+end
+
+local function CurvePeak(curve)
+    if curve.peak then return curve.peak end
+    local best, peak = -math.huge, 1
+    for i, row in ipairs(curve) do
+        if row[5] > best then best, peak = row[5], i - 1 end
+    end
+    curve.peak = peak
+    return peak
+end
+
+local function SampleCurve(curve, frame, out, scale, rotScale, posScale, bounce)
+    if bounce ~= 1 then
+        local peak = CurvePeak(curve)
+        scale = scale * Lerp(math.Clamp(frame - peak, 0, 1), 1, bounce)
+    end
+    local n = #curve
+    local i = math.floor(frame)
+    local f = frame - i
+    local a = curve[math.Clamp(i, 1, n)]
+    local b = curve[math.Clamp(i + 1, 1, n)]
+    local c = curve[math.Clamp(i + 2, 1, n)]
+    local d = curve[math.Clamp(i + 3, 1, n)]
+    for k = 1, 6 do
+        local v = CatmullRom(a[k], b[k], c[k], d[k], f) * scale
+        out[k] = out[k] + v * (k <= 3 and rotScale or posScale)
+    end
+end
+
+local function ApplyKick(wep, pos, ang, axes, eyePos, st)
+    local cfg = wep.VMRecoil
+    local right, fwd, up = axes[1], axes[2], axes[3]
+    local pv = cfg.Pivot or vector_origin
+    kickPivot:SetUnpacked(
+        pos.x + right.x * pv.x + fwd.x * pv.y + up.x * pv.z,
+        pos.y + right.y * pv.x + fwd.y * pv.y + up.y * pv.z,
+        pos.z + right.z * pv.x + fwd.z * pv.y + up.z * pv.z)
+
+    local c = st.c
+    local localPos = WorldToLocal(pos, angle_zero, kickPivot, ang)
+    ang:RotateAroundAxis(right, c[1])
+    ang:RotateAroundAxis(up, c[2])
+    ang:RotateAroundAxis(fwd, c[3])
+    local p = LocalToWorld(localPos, angle_zero, kickPivot, ang)
+
+    local ox, oy, oz = c[4], -c[5], c[6]
+    pos:SetUnpacked(
+        p.x + right.x * ox + fwd.x * oy + up.x * oz,
+        p.y + right.y * ox + fwd.y * oy + up.y * oz,
+        p.z + right.z * ox + fwd.z * oy + up.z * oz)
+    return pos
+end
 
 function SWEP:ComputeViewModelPosition(pos, ang)
     local inAng = ang

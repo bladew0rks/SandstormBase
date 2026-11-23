@@ -574,6 +574,89 @@ local function SampleCurve(curve, frame, out, scale, rotScale, posScale, bounce)
     end
 end
 
+local function VMKick(wep, aimT)
+    local cfg = wep.VMRecoil
+    if not cfg then return false end
+
+    local set = SandSwep.VMRecoilCurves and SandSwep.VMRecoilCurves[cfg.Curve or "pistol"]
+    if not set then return false end
+
+    local st = wep._vmk
+    if not st then
+        st = { plays = {}, heat = 0, heatC = 0, drift = 0, driftC = 0 }
+        wep._vmk = st
+    end
+
+    local acc = cfg.Accumulate
+
+    local clip = wep:Clip1()
+    local lastClip = wep._vmkClip
+    wep._vmkClip = clip
+
+    local now = RealTime()
+    if lastClip and clip == lastClip - 1 then
+        local list = aimT > 0.5 and (set.Aim or set.Hip) or set.Hip
+        local mult = (cfg.Scale or 1) * wep:GetStatMult("Recoil") * (aimT > 0.5 and (cfg.AimScale or 1) or 1)
+        local plays = st.plays
+        if #plays >= KICK_MAX_PLAYS then table.remove(plays, 1) end
+        local aiming = aimT > 0.5
+        local mirror = cfg.Mirror ~= false and math.random() < 0.5 and -1 or 1
+        plays[#plays + 1] = { start = now, curve = list[math.random(#list)], scale = mult, mirror = mirror,
+            rot = aiming and cfg.AimRotScale or cfg.RotScale or 1, pos = aiming and cfg.AimPosScale or cfg.PosScale or 1 }
+
+        if acc then
+            st.heat = math.min(st.heat + mult, acc.Max or 5)
+            st.drift = math.Clamp(st.drift + math.Rand(-1, 1) * mult, -(acc.Max or 5), acc.Max or 5)
+        end
+    end
+
+    if acc and st.frame ~= FrameNumber() then
+        st.frame = FrameNumber()
+        local dt = math.min(RealFrameTime(), 0.1)
+        local decay = math.exp(-(acc.Decay or 3) * dt)
+        st.heat, st.drift = st.heat * decay, st.drift * decay
+        local follow = 1 - math.exp(-(acc.Follow or 14) * dt)
+        st.heatC = st.heatC + (st.heat - st.heatC) * follow
+        st.driftC = st.driftC + (st.drift - st.driftC) * follow
+        if st.heat < 1e-3 and st.heatC < 1e-3 and math.abs(st.driftC) < 1e-3 then
+            st.heat, st.heatC, st.drift, st.driftC = 0, 0, 0, 0
+        end
+    end
+
+    local plays = st.plays
+    local warm = acc and st.heatC > 0
+    if #plays == 0 and not warm then return false end
+
+    for k = 1, 6 do kickSum[k] = 0 end
+    local fps = set.FPS or 30
+    for i = #plays, 1, -1 do
+        local play = plays[i]
+        local frame = (now - play.start) * fps * (cfg.Speed or 1)
+        if frame >= #play.curve - 1 then
+            table.remove(plays, i)
+        else
+            local y, r, x = kickSum[2], kickSum[3], kickSum[4]
+            SampleCurve(play.curve, frame, kickSum, play.scale, play.rot, play.pos, cfg.Bounce or 1)
+            if play.mirror < 0 then
+                kickSum[2] = y - (kickSum[2] - y)
+                kickSum[3] = r - (kickSum[3] - r)
+                kickSum[4] = x - (kickSum[4] - x)
+            end
+        end
+    end
+
+    if warm then
+        local aimMul = aimT > 0.5 and (acc.AimScale or 0.5) or 1
+        kickSum[1] = kickSum[1] + st.heatC * (acc.Pitch or 1.2) * aimMul
+        kickSum[2] = kickSum[2] + st.driftC * (acc.Yaw or 0.4) * aimMul
+        kickSum[5] = kickSum[5] + st.heatC * (acc.Back or 0.35) * aimMul
+        kickSum[6] = kickSum[6] + st.heatC * (acc.Up or 0.05) * aimMul
+    end
+
+    st.c = kickSum
+    return st
+end
+
 local function ApplyKick(wep, pos, ang, axes, eyePos, st)
     local cfg = wep.VMRecoil
     local right, fwd, up = axes[1], axes[2], axes[3]
@@ -617,6 +700,7 @@ function SWEP:ComputeViewModelPosition(pos, ang)
     local sprintPoseT = animSprint and 0 or sprintVis
     local safeT = Smoothstep(self._safeProg) * (1 - sprintVis)
     local checkT = self:GetMagCheckWeight()
+    local kick = VMKick(self, aimT)
     userOffset:SetUnpacked(cvVMOffX:GetFloat(), cvVMOffY:GetFloat(), cvVMOffZ:GetFloat())
     local hasOffset = not userOffset:IsZero()
 
@@ -634,6 +718,7 @@ function SWEP:ComputeViewModelPosition(pos, ang)
         and wallBack <= 0 and wallTilt <= 0
         and bipodW <= 0
         and not self.HipPos
+        and not kick
         and not hasOffset
 
     if untouched then
@@ -682,6 +767,10 @@ function SWEP:ComputeViewModelPosition(pos, ang)
                 pPos.y + pr.y * ox + pf.y * oy + pu.y * oz,
                 pPos.z + pr.z * ox + pf.z * oy + pu.z * oz)
         end
+    end
+
+    if kick then
+        pos = ApplyKick(self, pos, newAng, axes, eyePos, kick)
     end
 
     if safeT > 0 then

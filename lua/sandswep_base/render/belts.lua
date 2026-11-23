@@ -391,7 +391,31 @@ local function CollideAttached(sim, cfg, info, ply)
     end
 end
 
-local function FollowGun(sim, frame, inertia, snap)
+local function FollowEye(sim, info)
+    if not info or not info.origin or not info.ang then return end
+
+    local eye = sim.eye or Matrix()
+    sim.eye = eye
+    local cur = Matrix()
+    cur:SetTranslation(info.origin)
+    cur:SetAngles(info.ang)
+
+    if sim.hasEye then
+        local carry = cur * eye:GetInverseTR()
+        for _, node in ipairs(sim.nodes) do
+            node.p = carry * node.p
+            node.o = carry * node.o
+        end
+        if sim.lastM then sim.lastM = carry * sim.lastM end
+    end
+
+    eye:Set(cur)
+    sim.hasEye = true
+end
+
+local function FollowGun(sim, frame, inertia, snap, info)
+    FollowEye(sim, info)
+
     if sim.lastM then
         local carry = frame.m * sim.lastM:GetInverseTR()
         local follow = snap and 1 or 1 - math.Clamp(inertia, 0, 1)
@@ -489,7 +513,7 @@ local function DrawHangingBelt(wep, vm, info)
     end
     if wep:IsReloading() and #nodes == 0 then feeds = 0 end
 
-    FollowGun(sim, frame, cfg.Inertia or 0.15, sim.lastExit and sim.lastExit:DistToSqr(exit) > 40 * 40)
+    FollowGun(sim, frame, cfg.Inertia or 0.15, sim.lastExit and sim.lastExit:DistToSqr(exit) > 40 * 40, info)
     sim.lastExit = exit
 
     for _ = 1, feeds do
@@ -634,7 +658,7 @@ local function DrawLiveBelt(wep, vm, info)
         sim.nodes = nodes
     end
 
-    FollowGun(sim, frame, cfg.Inertia or 0.2, false)
+    FollowGun(sim, frame, cfg.Inertia or 0.2, false, info)
 
     local want = math.min(rounds, cfg.MaxLinks or 30)
     while #nodes > want do table.remove(nodes) end

@@ -108,13 +108,13 @@ local function FramePreview(preview, gun)
     local points = {}
     for bone = 0, gun:GetBoneCount() - 1 do
         local name = gun:GetBoneName(bone) or ""
-        if string.StartWith(name, "b_wpn") or string.StartWith(name, "a_") then
+        if string.StartWith(name, "b_wpn") or string.StartWith(name, "a_") or string.StartWith(name, "tag_") then
             local matrix = gun:GetBoneMatrix(bone)
             if matrix then points[#points + 1] = { bone = bone, pos = matrix:GetTranslation() } end
         end
     end
 
-    local rootBone = gun:LookupBone("b_wpn")
+    local rootBone = gun:LookupBone("b_wpn") or gun:LookupBone("J_Gun")
     local rootMatrix = rootBone and gun:GetBoneMatrix(rootBone)
     local refPos = rootMatrix and rootMatrix:GetTranslation()
     if not refPos and #points > 0 then

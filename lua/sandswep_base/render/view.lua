@@ -38,6 +38,9 @@ local cvCrosshair = CreateClientConVar("cl_sandswep_crosshair", "1", true, false
 local cvHideCrosshair = CreateClientConVar("cl_sandswep_hide_crosshair", "1", true, false, "Hide the default crosshair on SandSwep weapons")
 local cvVMFov = CreateClientConVar("cl_sandswep_vmfov", "0", true, false, "Viewmodel FOV offset (hip)", -30, 40)
 local cvVMFovAim = CreateClientConVar("cl_sandswep_vmfov_aim", "0", true, false, "Keep the viewmodel FOV offset while aiming", 0, 1)
+local cvVMOffX = CreateClientConVar("cl_sandswep_vm_offset_x", "0", true, false, "Viewmodel offset right (hip)", -10, 10)
+local cvVMOffY = CreateClientConVar("cl_sandswep_vm_offset_y", "0", true, false, "Viewmodel offset forward (hip)", -10, 10)
+local cvVMOffZ = CreateClientConVar("cl_sandswep_vm_offset_z", "0", true, false, "Viewmodel offset up (hip)", -10, 10)
 local cvSprintCam = CreateClientConVar("cl_sandswep_sprintcam", "1", true, false, "Sprint sway", 0, 3)
 local cvCamAnim = CreateClientConVar("cl_sandswep_cameraanim", "1", true, false, "Animation camera", 0, 3)
 
@@ -533,6 +536,7 @@ local function ApplyAimPoses(wep, pos, ang, axes, blended, aimRaw, aimT, dev)
 end
 
 local vmPosScratch, vmAngScratch = Vector(), Angle()
+local userOffset = Vector()
 
 function SWEP:ComputeViewModelPosition(pos, ang)
     local inAng = ang
@@ -553,6 +557,8 @@ function SWEP:ComputeViewModelPosition(pos, ang)
     local sprintPoseT = animSprint and 0 or sprintVis
     local safeT = Smoothstep(self._safeProg) * (1 - sprintVis)
     local checkT = self:GetMagCheckWeight()
+    userOffset:SetUnpacked(cvVMOffX:GetFloat(), cvVMOffY:GetFloat(), cvVMOffZ:GetFloat())
+    local hasOffset = not userOffset:IsZero()
 
     local blended, sight = self:GetBlendedSight()
     local baseFOV = self.BaseViewModelFOV or self.ViewModelFOV
@@ -568,6 +574,7 @@ function SWEP:ComputeViewModelPosition(pos, ang)
         and wallBack <= 0 and wallTilt <= 0
         and bipodW <= 0
         and not self.HipPos
+        and not hasOffset
 
     if untouched then
         return pos, ang
@@ -583,6 +590,10 @@ function SWEP:ComputeViewModelPosition(pos, ang)
 
     if self.HipPos and aimT < 1 then
         pos = ApplyPose(pos, newAng, axes, self.HipPos, self.HipAng or angle_zero, 1 - aimT)
+    end
+
+    if hasOffset and aimT < 1 then
+        pos = ApplyPose(pos, newAng, axes, userOffset, angle_zero, 1 - aimT)
     end
 
     local bipodPose = self.Bipod and self:GetBipodPose()

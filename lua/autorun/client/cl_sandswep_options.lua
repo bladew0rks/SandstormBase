@@ -147,13 +147,17 @@ hook.Add("PopulateToolMenu", "SandSwep_Options", function()
         panel:ClearControls()
         panel:NumSlider("Viewmodel FOV offset", "cl_sandswep_vmfov", -30, 40, 0)
         panel:CheckBox("Keep FOV offset while aiming", "cl_sandswep_vmfov_aim")
+        panel:NumSlider("Viewmodel offset right", "cl_sandswep_vm_offset_x", -10, 10, 2)
+        panel:NumSlider("Viewmodel offset forward", "cl_sandswep_vm_offset_y", -10, 10, 2)
+        panel:NumSlider("Viewmodel offset up", "cl_sandswep_vm_offset_z", -10, 10, 2)
         panel:NumSlider("Animation camera", "cl_sandswep_cameraanim", 0, 3, 2)
         panel:NumSlider("Walk bob", "cl_sandswep_bob", 0, 3, 2)
         panel:NumSlider("Idle breathing", "cl_sandswep_breath", 0, 3, 2)
         panel:NumSlider("Sprint sway", "cl_sandswep_sprintcam", 0, 3, 2)
         panel:CheckBox("Centred bipod hold", "cl_sandswep_bipod_centered")
 
-        ResetButton(panel, {"cl_sandswep_vmfov", "cl_sandswep_vmfov_aim", "cl_sandswep_cameraanim", "cl_sandswep_bob", "cl_sandswep_breath", "cl_sandswep_sprintcam",
+        ResetButton(panel, {"cl_sandswep_vmfov", "cl_sandswep_vmfov_aim", "cl_sandswep_vm_offset_x", "cl_sandswep_vm_offset_y",
+            "cl_sandswep_vm_offset_z", "cl_sandswep_cameraanim", "cl_sandswep_bob", "cl_sandswep_breath", "cl_sandswep_sprintcam",
             "cl_sandswep_bipod_centered"})
     end)
 

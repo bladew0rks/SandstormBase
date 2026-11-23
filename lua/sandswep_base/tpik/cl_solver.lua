@@ -1245,6 +1245,8 @@ function SANDTPIK.MeshLOD(ent)
     return 0
 end
 
+local DEPTH_PASS = bit.bor(STUDIO_SHADOWDEPTHTEXTURE or 0, STUDIO_SSAODEPTHTEXTURE or 0)
+
 hook.Add("PostPlayerDraw", "SandTPIK", function(ply, flags)
     if not IsValid(ply) then return end
 
@@ -1260,7 +1262,7 @@ hook.Add("PostPlayerDraw", "SandTPIK", function(ply, flags)
     local state = wep.SandTPIK_State
     if state then SANDTPIK.DrawAttachments(wep, tpik, state, flags) end
 
-    if render.RenderFlashlights then
+    if render.RenderFlashlights and bit.band(flags or 0, DEPTH_PASS) == 0 then
         render.RenderFlashlights(function()
             tpik:DrawModel(flags)
             if state then SANDTPIK.DrawAttachments(wep, tpik, state, flags) end

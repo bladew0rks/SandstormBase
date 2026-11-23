@@ -379,11 +379,50 @@ function SWEP:OnReloaded()
     self:SetWeaponHoldType(self:GetHoldType())
 end
 
+local function WeaponFile(class)
+    local single = "weapons/" .. class .. ".lua"
+    if file.Exists(single, "LUA") then return single end
+    local folder = "weapons/" .. class .. "/shared.lua"
+    if file.Exists(folder, "LUA") then return folder end
+end
+
+local function BaseDepth(class)
+    local depth, seen = 0, {}
+    while class and not seen[class] do
+        if class == "weapon_sand_base" then return depth end
+        seen[class] = true
+        local stored = weapons.GetStored(class)
+        class = stored and stored.Base
+        depth = depth + 1
+    end
+end
+
+local function DerivedClasses()
+    local list, depth = {}, {}
+    for _, wep in ipairs(weapons.GetList()) do
+        local class = wep.ClassName
+        local d = class and BaseDepth(class)
+        if d and d > 0 then
+            list[#list + 1] = class
+            depth[class] = d
+        end
+    end
+
+    table.sort(list, function(a, b)
+        if depth[a] ~= depth[b] then return depth[a] < depth[b] end
+        return a < b
+    end)
+    return list
+end
+
 local function ReloadWeaponFile(class)
+    local path = WeaponFile(class)
+    if not path then return false end
+
     local prev = SWEP
     SWEP = { Folder = "weapons/" .. class, ClassName = class, Primary = {}, Secondary = {} }
 
-    local ok, err = pcall(include, "weapons/" .. class .. ".lua")
+    local ok, err = pcall(include, path)
     if ok then
         weapons.Register(SWEP, class)
     else
@@ -414,6 +453,8 @@ function SandSwep.ReloadBase()
         end
     end
 
+    include("autorun/sandswep_tpik_init.lua")
+
     local autorefresh
     if CLIENT then
         autorefresh = (hook.GetTable().PreRegisterSWEP or {}).spawnmenu_reload_swep
@@ -423,11 +464,8 @@ function SandSwep.ReloadBase()
     local loaded, failed = 0, 0
     if ReloadWeaponFile("weapon_sand_base") then loaded = loaded + 1 else failed = failed + 1 end
 
-    for _, fileName in ipairs((file.Find("weapons/weapon_sand_*.lua", "LUA"))) do
-        local class = fileName:sub(1, -5)
-        if class ~= "weapon_sand_base" then
-            if ReloadWeaponFile(class) then loaded = loaded + 1 else failed = failed + 1 end
-        end
+    for _, class in ipairs(DerivedClasses()) do
+        if ReloadWeaponFile(class) then loaded = loaded + 1 else failed = failed + 1 end
     end
 
     if autorefresh then hook.Add("PreRegisterSWEP", "spawnmenu_reload_swep", autorefresh) end

@@ -229,9 +229,15 @@ local function OpticFrame(att)
 end
 
 function SWEP:GetLensData(sight)
-    if not sight or not sight.AttSlot or not sight.Lens then return end
+    if not sight or not sight.Lens then return end
 
-    local ent = self._vmAttEnts and self._vmAttEnts[sight.AttSlot]
+    local ent
+    if sight.AttSlot then
+        ent = self._vmAttEnts and self._vmAttEnts[sight.AttSlot]
+    else
+        local owner = self:GetOwner()
+        ent = IsValid(owner) and owner.GetViewModel and owner:GetViewModel()
+    end
     if not IsValid(ent) then return end
 
     local attId = ent:LookupAttachment(sight.Lens.Attachment or "lens")

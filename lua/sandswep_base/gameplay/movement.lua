@@ -1,5 +1,6 @@
 local Shared = SandSwep.BaseShared
 local RELOAD_TACTICAL, RELOAD_INSERT, SinceTime = Shared.RELOAD_TACTICAL, Shared.RELOAD_INSERT, Shared.SinceTime
+local Smoothstep = SandSwep.Math.Smoothstep
 
 -- Hold breath
 
@@ -18,7 +19,7 @@ function SWEP:GetFocusProgress()
     local elapsed = SinceTime(self:GetFocusChange())
     local blend = math.Approach(self:GetFocusFrom(), self:GetFocusing() and 1 or 0, elapsed / math.max(self.FocusEaseTime, 0.01))
 
-    return blend * blend * (3 - 2 * blend)
+    return Smoothstep(blend)
 end
 
 function SWEP:SetFocusState(on)
@@ -104,10 +105,7 @@ function SWEP:IsActionBusy()
 end
 
 -- Bipod
-local function BipodSmooth(t)
-    t = math.Clamp(t, 0, 1)
-    return t * t * (3 - 2 * t)
-end
+local BipodSmooth = SandSwep.Math.Smoothstep01
 
 function SWEP:HasBipod()
     if not (istable(self.Bipod) and self.Bipod.Feet ~= nil) then return false end
@@ -208,7 +206,7 @@ function SWEP:GetBipodView(eye, ang, fov)
     if weight <= 0 then return eye end
 
     local aim = self:GetAimProgress()
-    local feet = self:GetBipodFeet(aim * aim * (3 - 2 * aim))
+    local feet = self:GetBipodFeet(Smoothstep(aim))
     local fovScale = self:GetBipodFovScale(fov)
     local cam = self:GetBipodPos()
         - ang:Forward() * feet.y

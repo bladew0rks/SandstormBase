@@ -90,8 +90,8 @@ function WALL.Response(amount, reach, aimDelta)
     local tiltRange = math.max(WALL.Setting("tilt_range"), 0.05)
 
     local back = math.min(amount, maxBack) * Lerp(aimDelta, 1, 0.75) * strength
-    local tilt = math.Clamp((amount - maxBack * 0.5) / (reach * tiltRange), 0, 1)
-    tilt = tilt * tilt * (3 - 2 * tilt) * Lerp(aimDelta, 1, 0.5) * strength * tiltScale
+    local tilt = SandSwep.Math.Smoothstep01((amount - maxBack * 0.5) / (reach * tiltRange))
+    tilt = tilt * Lerp(aimDelta, 1, 0.5) * strength * tiltScale
 
     return back, tilt
 end

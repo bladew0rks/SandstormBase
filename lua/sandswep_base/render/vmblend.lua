@@ -141,7 +141,7 @@ local function BlendWeight(wep, snap)
         return
     end
 
-    return blend, frac * frac * (3 - 2 * frac)
+    return blend, SandSwep.Math.Smoothstep(frac)
 end
 
 local CAPTURE_INTERVAL = 1 / 120

@@ -296,8 +296,7 @@ function SWEP:GetBarrelShot()
         return shootPos, aimDir, shootPos, false
     end
 
-    local blend = math.Clamp(self:GetAimProgress(), 0, 1)
-    blend = blend * blend * (3 - 2 * blend)
+    local blend = SandSwep.Math.Smoothstep01(self:GetAimProgress())
     blend = blend * (1 - math.Clamp(barrel.tilt / 5, 0, 1))
 
     local localPos = barrel.pos

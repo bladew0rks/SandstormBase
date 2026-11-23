@@ -26,30 +26,7 @@ local function Rod(vec, axis, cos, sin)
     return vec * cos + axis:Cross(vec) * sin + axis * (axis:Dot(vec) * (1 - cos))
 end
 
-local function RodXYZ(vx, vy, vz, ax, ay, az, cos, sin)
-    local dot = (ax * vx + ay * vy + az * vz) * (1 - cos)
-    return vx * cos + (ay * vz - az * vy) * sin + ax * dot,
-        vy * cos + (az * vx - ax * vz) * sin + ay * dot,
-        vz * cos + (ax * vy - ay * vx) * sin + az * dot
-end
-
-local function Turn(mat, axis, cos, sin, pivot)
-    local m11, m12, m13, m14, m21, m22, m23, m24, m31, m32, m33, m34 = mat:Unpack()
-    local ax, ay, az = axis.x, axis.y, axis.z
-    local px, py, pz = pivot.x, pivot.y, pivot.z
-
-    m11, m21, m31 = RodXYZ(m11, m21, m31, ax, ay, az, cos, sin)
-    m12, m22, m32 = RodXYZ(m12, m22, m32, ax, ay, az, cos, sin)
-    m13, m23, m33 = RodXYZ(m13, m23, m33, ax, ay, az, cos, sin)
-    m14, m24, m34 = RodXYZ(m14 - px, m24 - py, m34 - pz, ax, ay, az, cos, sin)
-
-    mat:SetUnpacked(
-        m11, m12, m13, m14 + px,
-        m21, m22, m23, m24 + py,
-        m31, m32, m33, m34 + pz,
-        0, 0, 0, 1)
-    return mat
-end
+local Turn = SandSwep.Math.TurnMatrix
 
 local function Between(from, to)
     local fromLen, toLen = from:Length(), to:Length()

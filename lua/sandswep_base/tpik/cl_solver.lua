@@ -176,9 +176,7 @@ local function applyBoneMatrix(ent, bone, newMatrix, stopBone)
     entitySetBoneMatrix(ent, bone, newMatrix)
 end
 
-local function smooth(t)
-    return t * t * (3 - 2 * t)
-end
+local smooth = SandSwep.Math.Smoothstep
 
 local function noop() end
 

@@ -1,6 +1,7 @@
 local VisualFrameTime = SandSwep.VisualFrameTime
 
 local SinceTime = SandSwep.BaseShared.SinceTime
+local Smoothstep = SandSwep.Math.Smoothstep
 
 -- Attachments
 
@@ -836,7 +837,7 @@ function SWEP:UpdatePointAimProgress()
     local time = self.PointAimTime or 0
     local ramp = time > 0 and math.Approach(self._pointRamp, target, dt / time) or target
     self._pointRamp = ramp
-    local goal = ramp * ramp * (3 - 2 * ramp)
+    local goal = Smoothstep(ramp)
 
     local spring = self.PointAimSpring or 10
     local damping = self.PointAimDamping or 0.75
@@ -932,7 +933,7 @@ function SWEP:GetSightFlip(slotName, flipTime)
             local flipStart = switchTime - (toggle.Commit or 0) + (toggle.FlipStart or 0)
             local duration = math.max(toggle.FlipTime or flipTime or 0.25, 0.01)
             local frac = math.Clamp((CurTime() - flipStart) / duration, 0, 1)
-            value = Lerp(frac * frac * (3 - 2 * frac), value, toggle.Flip)
+            value = Lerp(Smoothstep(frac), value, toggle.Flip)
         end
     end
 
@@ -978,11 +979,10 @@ local function ComputeFOV(self, fov)
     local zoom = (self:GetActiveSight().Zoom or 1) * Lerp(self:GetFocusProgress(), 1, self.FocusZoom)
     local point = self:GetPointAimProgress()
     if point > 0 then
-        zoom = Lerp(point * point * (3 - 2 * point), zoom, self.PointAimZoom or 1)
+        zoom = Lerp(Smoothstep(point), zoom, self.PointAimZoom or 1)
     end
 
-    blend = blend * blend * (3 - 2 * blend)
-    return fov / Lerp(blend, 1, zoom)
+    return fov / Lerp(Smoothstep(blend), 1, zoom)
 end
 
 function SWEP:TranslateFOV(fov)

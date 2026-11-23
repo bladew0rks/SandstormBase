@@ -49,119 +49,14 @@ local sqrt, abs, min, max = math.sqrt, math.abs, math.min, math.max
 local IDLE_RAIL_MIN, IDLE_RAIL_MAX = -0.25, 1.25
 local IDLE_RAIL_RADIUS_SQR = 0.36
 
-local function Clamp01(x)
-    return x < 0 and 0 or (x > 1 and 1 or x)
-end
-
-local function Read(out, mat)
-    out[1], out[2], out[3], out[4], out[5], out[6], out[7], out[8], out[9], out[10], out[11], out[12] = mat:Unpack()
-end
-
-local function Copy(out, src)
-    for k = 1, 12 do out[k] = src[k] end
-end
-
-local function Mul(out, lhs, rhs)
-    local a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12 = lhs[1], lhs[2], lhs[3], lhs[4], lhs[5], lhs[6], lhs[7], lhs[8], lhs[9], lhs[10], lhs[11], lhs[12]
-    local b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12 = rhs[1], rhs[2], rhs[3], rhs[4], rhs[5], rhs[6], rhs[7], rhs[8], rhs[9], rhs[10], rhs[11], rhs[12]
-
-    out[1] = a1 * b1 + a2 * b5 + a3 * b9
-    out[2] = a1 * b2 + a2 * b6 + a3 * b10
-    out[3] = a1 * b3 + a2 * b7 + a3 * b11
-    out[4] = a1 * b4 + a2 * b8 + a3 * b12 + a4
-    out[5] = a5 * b1 + a6 * b5 + a7 * b9
-    out[6] = a5 * b2 + a6 * b6 + a7 * b10
-    out[7] = a5 * b3 + a6 * b7 + a7 * b11
-    out[8] = a5 * b4 + a6 * b8 + a7 * b12 + a8
-    out[9] = a9 * b1 + a10 * b5 + a11 * b9
-    out[10] = a9 * b2 + a10 * b6 + a11 * b10
-    out[11] = a9 * b3 + a10 * b7 + a11 * b11
-    out[12] = a9 * b4 + a10 * b8 + a11 * b12 + a12
-end
-
-local function InvMul(out, lhs, rhs)
-    local a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12 = lhs[1], lhs[2], lhs[3], lhs[4], lhs[5], lhs[6], lhs[7], lhs[8], lhs[9], lhs[10], lhs[11], lhs[12]
-    local c1, c2, c3 = a6 * a11 - a7 * a10, a3 * a10 - a2 * a11, a2 * a7 - a3 * a6
-    local det = a1 * c1 + a5 * c2 + a9 * c3
-    if abs(det) < 1e-12 then return false end
-
-    local invDet = 1 / det
-    local i1, i2, i3 = c1 * invDet, c2 * invDet, c3 * invDet
-    local i5, i6, i7 = (a7 * a9 - a5 * a11) * invDet, (a1 * a11 - a3 * a9) * invDet, (a3 * a5 - a1 * a7) * invDet
-    local i9, i10, i11 = (a5 * a10 - a6 * a9) * invDet, (a2 * a9 - a1 * a10) * invDet, (a1 * a6 - a2 * a5) * invDet
-
-    local b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12 = rhs[1], rhs[2], rhs[3], rhs[4] - a4, rhs[5], rhs[6], rhs[7], rhs[8] - a8, rhs[9], rhs[10], rhs[11], rhs[12] - a12
-
-    out[1] = i1 * b1 + i2 * b5 + i3 * b9
-    out[2] = i1 * b2 + i2 * b6 + i3 * b10
-    out[3] = i1 * b3 + i2 * b7 + i3 * b11
-    out[4] = i1 * b4 + i2 * b8 + i3 * b12
-    out[5] = i5 * b1 + i6 * b5 + i7 * b9
-    out[6] = i5 * b2 + i6 * b6 + i7 * b10
-    out[7] = i5 * b3 + i6 * b7 + i7 * b11
-    out[8] = i5 * b4 + i6 * b8 + i7 * b12
-    out[9] = i9 * b1 + i10 * b5 + i11 * b9
-    out[10] = i9 * b2 + i10 * b6 + i11 * b10
-    out[11] = i9 * b3 + i10 * b7 + i11 * b11
-    out[12] = i9 * b4 + i10 * b8 + i11 * b12
-
-    return true
-end
-
-local ROT = {}
-
-local function QuatRot(x, y, z, w)
-    ROT[1], ROT[2], ROT[3] = 1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)
-    ROT[4], ROT[5], ROT[6] = 2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)
-    ROT[7], ROT[8], ROT[9] = 2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)
-end
-
-local function RotMul(out, mat)
-    local r1, r2, r3, r4, r5, r6, r7, r8, r9 = ROT[1], ROT[2], ROT[3], ROT[4], ROT[5], ROT[6], ROT[7], ROT[8], ROT[9]
-    local a1, a2, a3, a5, a6, a7, a9, a10, a11 = mat[1], mat[2], mat[3], mat[5], mat[6], mat[7], mat[9], mat[10], mat[11]
-
-    out[1] = r1 * a1 + r2 * a5 + r3 * a9
-    out[2] = r1 * a2 + r2 * a6 + r3 * a10
-    out[3] = r1 * a3 + r2 * a7 + r3 * a11
-    out[5] = r4 * a1 + r5 * a5 + r6 * a9
-    out[6] = r4 * a2 + r5 * a6 + r6 * a10
-    out[7] = r4 * a3 + r5 * a7 + r6 * a11
-    out[9] = r7 * a1 + r8 * a5 + r9 * a9
-    out[10] = r7 * a2 + r8 * a6 + r9 * a10
-    out[11] = r7 * a3 + r8 * a7 + r9 * a11
-end
+local MATH = SandSwep.Math
+local Clamp01, Normalize = MATH.Clamp01, MATH.Unit
+local Read, Copy, Mul, InvMul = MATH.ReadMatrix, MATH.CopyMatrix, MATH.MulMatrix, MATH.InvMulMatrix
+local QuatRot, RotMul, BetweenRot = MATH.QuatRot, MATH.RotMul, MATH.BetweenRot
 
 local function DeltaRot(delta, weight)
     local bias = delta[5] >= 0 and 1 or -1
     local x, y, z, w = delta[2] * weight, delta[3] * weight, delta[4] * weight, delta[5] * weight + (1 - weight) * bias
-    local len = sqrt(x * x + y * y + z * z + w * w)
-    QuatRot(x / len, y / len, z / len, w / len)
-end
-
-local function Normalize(x, y, z)
-    local len = sqrt(x * x + y * y + z * z)
-    if len < 1e-12 then return 0, 0, 0 end
-
-    return x / len, y / len, z / len
-end
-
-local function BetweenRot(ax, ay, az, bx, by, bz)
-    ax, ay, az = Normalize(ax, ay, az)
-    bx, by, bz = Normalize(bx, by, bz)
-
-    local w = 1 + ax * bx + ay * by + az * bz
-    local x, y, z
-    if w < 1e-6 then
-        w = 0
-        if abs(ax) > abs(az) then
-            x, y, z = -ay, ax, 0
-        else
-            x, y, z = 0, -az, ay
-        end
-    else
-        x, y, z = ay * bz - az * by, az * bx - ax * bz, ax * by - ay * bx
-    end
-
     local len = sqrt(x * x + y * y + z * z + w * w)
     QuatRot(x / len, y / len, z / len, w / len)
 end
@@ -664,8 +559,7 @@ local function ReloadRelease(vm, rig, seq, cycle, release)
     end
     if not isReload then return 0 end
 
-    local progress = Clamp01(cycle * vm:SequenceDuration(seq) / release)
-    return 1 - progress * progress * (3 - 2 * progress)
+    return 1 - MATH.Smoothstep(Clamp01(cycle * vm:SequenceDuration(seq) / release))
 end
 
 local function GripWeights(wep, vm, rig, data, gripId, gripDef, seq, cycle)

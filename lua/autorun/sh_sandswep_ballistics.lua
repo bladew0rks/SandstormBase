@@ -907,7 +907,7 @@ end
 local function Burn(v, life)
     life = life or cvTracerTime:GetFloat()
     local left = math.Clamp((life - v.Age) / (life * BURNOUT), 0, 1)
-    local heat = left * left * (3 - 2 * left)
+    local heat = SandSwep.Math.Smoothstep(left)
     local sputter = 1 - 0.4 * (1 - left) * math.abs(math.sin(v.Age * 31 + v.Flicker) * math.sin(v.Age * 17))
 
     local pal = Palette(v)

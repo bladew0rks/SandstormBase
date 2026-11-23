@@ -45,9 +45,7 @@ local cvVMOffZ = CreateClientConVar("cl_sandswep_vm_offset_z", "0", true, false,
 local cvSprintCam = CreateClientConVar("cl_sandswep_sprintcam", "1", true, false, "Sprint sway", 0, 3)
 local cvCamAnim = CreateClientConVar("cl_sandswep_cameraanim", "1", true, false, "Animation camera", 0, 3)
 
-local function Smoothstep(t)
-    return t * t * (3 - 2 * t)
-end
+local Smoothstep = SandSwep.Math.Smoothstep
 
 local function ApplyPose(pos, ang, axes, offset, rot, t)
     local right, fwd, up = axes[1], axes[2], axes[3]

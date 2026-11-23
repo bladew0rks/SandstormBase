@@ -63,10 +63,7 @@ function SWEP:PrecacheReticles()
     end
 end
 
-local function SmoothStep(x)
-    x = math.Clamp(x, 0, 1)
-    return x * x * (3 - 2 * x)
-end
+local SmoothStep = SandSwep.Math.Smoothstep01
 
 hook.Add("RenderScreenspaceEffects", "SandSwep_FocusVignette", function()
     local ply = LocalPlayer()
@@ -163,11 +160,6 @@ local function DrawShutterEdge(center, right, up, radius, edge, soft, r, g, b)
     Vertex(cx, cy, cz, rx, ry, rz, ux, uy, uz, x2, -h) mesh.Color(r, g, b, 255) mesh.AdvanceVertex()
     Vertex(cx, cy, cz, rx, ry, rz, ux, uy, uz, x1, -h) mesh.Color(r, g, b, 255) mesh.AdvanceVertex()
     mesh.End()
-end
-
-local function SmoothStep01(x)
-    x = math.Clamp(x, 0, 1)
-    return x * x * (3 - 2 * x)
 end
 
 local function DrawShutterMask(center, right, up, radius, edge, fringe)
@@ -374,7 +366,7 @@ local function DrawPIPImage(wep, sight, lens, lensPos, aimT)
         if shutter then
             local edge, uShift, smear = ShutterState(shutter)
             uShift, smear = uShift * dir, smear * dir
-            local ease = SmoothStep01(shutter / 0.25) * SmoothStep01((1 - shutter) / 0.25)
+            local ease = SmoothStep(shutter / 0.25) * SmoothStep((1 - shutter) / 0.25)
 
             render.SetColorMaterialIgnoreZ()
             DrawTexDisc(lensPos, right, up, radius, 0, 0, 0, 255)

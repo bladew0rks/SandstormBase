@@ -123,27 +123,20 @@ end
 
 local fitFore, fitHand = Matrix(), Matrix()
 
-local function FitSide(vm, fore, hand, length, weight, cachedStretch)
-    if not fore or not length or length <= 0.01 or weight <= 0 then return nil end
+local function FitSide(vm, fore, hand, length, weight)
+    if not fore or not length or length <= 0.01 or weight <= 0 then return end
 
     local a = CopyBone(vm, fore, fitFore)
-    if not a then return nil end
+    local b = a and hand and CopyBone(vm, hand, fitHand)
+    if not b then return end
 
-    local stretch = cachedStretch
-    if not stretch then
-        local b = hand and CopyBone(vm, hand, fitHand)
-        if not b then return nil end
+    local dx = a:GetField(1, 4) - b:GetField(1, 4)
+    local dy = a:GetField(2, 4) - b:GetField(2, 4)
+    local dz = a:GetField(3, 4) - b:GetField(3, 4)
+    local fit = sqrt(dx * dx + dy * dy + dz * dz) / length
 
-        local dx = a:GetField(1, 4) - b:GetField(1, 4)
-        local dy = a:GetField(2, 4) - b:GetField(2, 4)
-        local dz = a:GetField(3, 4) - b:GetField(3, 4)
-        local fit = sqrt(dx * dx + dy * dy + dz * dz) / length
-        stretch = 1 + (fit - 1) * weight
-    end
-
-    ScaleMatrixX(a, stretch)
+    ScaleMatrixX(a, 1 + (fit - 1) * weight)
     vm:SetBoneMatrix(fore, a)
-    return stretch
 end
 
 function SWEP:VMForearmFit(vm)
@@ -162,24 +155,13 @@ function SWEP:VMForearmFit(vm)
 
     local rest = cache.handsModel == handsModel and cache.rest or ForearmRest(handsModel)
     if not rest then return end
+    cache.handsModel, cache.rest = handsModel, rest
 
     local ids = ForearmBoneIds(vm)
-    local frame = FrameNumber()
-    local seq, cycle = vm:GetSequence(), vm:GetCycle()
-    local reuse = cache.frame == frame and cache.seq == seq and cache.cycle == cycle and cache.handsModel == handsModel
+    local weights = SandSwep.AnimatedHands and SandSwep.AnimatedHands()
 
-    local weights = not reuse and SandSwep.AnimatedHands and SandSwep.AnimatedHands() or nil
-    local wL = reuse and 1 or (weights and weights.L or 1)
-    local wR = reuse and 1 or (weights and weights.R or 1)
-
-    local sL = FitSide(vm, ids.L_fore, ids.L_hand, rest.L, wL, reuse and cache.sL or nil)
-    local sR = FitSide(vm, ids.R_fore, ids.R_hand, rest.R, wR, reuse and cache.sR or nil)
-
-    if not reuse then
-        cache.frame, cache.seq, cache.cycle = frame, seq, cycle
-        cache.handsModel, cache.rest = handsModel, rest
-        cache.sL, cache.sR = sL, sR
-    end
+    FitSide(vm, ids.L_fore, ids.L_hand, rest.L, weights and weights.L or 1)
+    FitSide(vm, ids.R_fore, ids.R_hand, rest.R, weights and weights.R or 1)
 end
 
 function SWEP:ApplyHandScale(vm)

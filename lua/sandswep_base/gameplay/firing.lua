@@ -340,12 +340,14 @@ end
 if SERVER then
     util.AddNetworkString("sandswep_muzzle")
 
+    local muzzleT = setmetatable({}, { __mode = "k" })
+
     net.Receive("sandswep_muzzle", function(_, ply)
         if not IsValid(ply) then return end
 
         local now = SysTime()
-        if now - (ply._sandswepMuzzleT or 0) < 1 / 100 then return end
-        ply._sandswepMuzzleT = now
+        if now - (muzzleT[ply] or 0) < 1 / 100 then return end
+        muzzleT[ply] = now
 
         local pos, dir, tilt = net.ReadVector(), net.ReadNormal(), net.ReadUInt(7)
 

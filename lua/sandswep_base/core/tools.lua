@@ -158,7 +158,7 @@ local BIND_CACHE_TTL = 1.0
 
 local function PlayerBinds(ply, now)
     local cache = ply.SandSwepBindCache
-    if cache and now - cache.at < BIND_CACHE_TTL then return cache end
+    if cache and now >= cache.at and now - cache.at < BIND_CACHE_TTL then return cache end
 
     cache = cache or { primary = {}, secondary = {} }
     ply.SandSwepBindCache = cache
@@ -304,10 +304,14 @@ if SERVER then
         if IsValid(wep) and wep.ToggleSafety then wep:ToggleSafety() end
     end)
 
+    local interruptCD = setmetatable({}, { __mode = "k" })
+
     concommand.Add("sandswep_interruptreload", function(ply)
         if not IsValid(ply) then return end
-        if (ply._sandswepInterruptCD or 0) > CurTime() then return end
-        ply._sandswepInterruptCD = CurTime() + 0.1
+
+        local now = SysTime()
+        if (interruptCD[ply] or 0) > now then return end
+        interruptCD[ply] = now + 0.1
 
         local wep = ply:GetActiveWeapon()
         if not IsValid(wep) or not wep.IsSandSwep or not wep:IsReloading() then return end

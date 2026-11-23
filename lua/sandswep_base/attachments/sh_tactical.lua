@@ -20,14 +20,19 @@ if SERVER then
         wep:EmitSound(("SandSwep.SS.%s_%s_1p"):format(device, state))
     end
 
+    local tacToggleCD = setmetatable({}, { __mode = "k" })
+    local tacModeCD = setmetatable({}, { __mode = "k" })
+
     local function TacticalCommand(fnName)
         return function(ply)
             if not IsValid(ply) then return end
 
             local wep = ply:GetActiveWeapon()
             if not IsValid(wep) or not wep.IsSandSwep or not wep[fnName] then return end
-            if (ply._sandswepTacToggleCD or 0) > CurTime() then return end
-            ply._sandswepTacToggleCD = CurTime() + 0.1
+
+            local now = SysTime()
+            if (tacToggleCD[ply] or 0) > now then return end
+            tacToggleCD[ply] = now + 0.1
 
             local hadLight = wep:GetLightOn()
             if wep[fnName](wep) then
@@ -47,8 +52,10 @@ if SERVER then
 
         local wep = ply:GetActiveWeapon()
         if not IsValid(wep) or not wep.IsSandSwep or not wep.SetTacticalMode then return end
-        if (ply._sandswepTacCD or 0) > CurTime() then return end
-        ply._sandswepTacCD = CurTime() + 0.03
+
+        local now = SysTime()
+        if (tacModeCD[ply] or 0) > now then return end
+        tacModeCD[ply] = now + 0.03
 
         local wasOn, hadLight = wep:GetTacticalOn(), wep:GetLightOn()
         if wep:SetTacticalMode(args[1]) and wasOn then

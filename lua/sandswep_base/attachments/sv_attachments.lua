@@ -13,15 +13,18 @@ concommand.Add("sandswep_menu", function(ply, _, args)
     end
 end)
 
+local attachCD = setmetatable({}, { __mode = "k" })
+
 local function LoadoutWeapon(ply)
     if not IsValid(ply) then return end
 
     local wep = ply:GetActiveWeapon()
     if not IsValid(wep) or not wep.IsSandSwep or not wep.ApplyLoadout then return end
     if wep:ActionBlocks("customize") then return end
-    if (ply._sandswepAttachCD or 0) > CurTime() then return end
 
-    ply._sandswepAttachCD = CurTime() + 0.3
+    local now = SysTime()
+    if (attachCD[ply] or 0) > now then return end
+    attachCD[ply] = now + 0.3
     return wep
 end
 
@@ -124,9 +127,10 @@ concommand.Add("sandswep_attach", function(ply, _, args)
     end
     if id == "none" or id == "" then id = nil end
 
-    if (ply._sandswepAttachCD or 0) > CurTime() then return end
+    local now = SysTime()
+    if (attachCD[ply] or 0) > now then return end
     if wep:ActionBlocks("customize") then return end
-    ply._sandswepAttachCD = CurTime() + 0.15
+    attachCD[ply] = now + 0.15
 
     if wep:CanAttach(slot, id) then
         wep:SetSlotAttachment(slot, id)

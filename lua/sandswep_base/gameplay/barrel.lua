@@ -8,6 +8,7 @@ if CLIENT then
     local muzzleScratch, barrelScratch = Vector(), Vector()
     local localPosScratch, localDirScratch = Vector(), Vector()
     local aimAngScratch = Angle()
+    local muzzleMat = Matrix()
     local cvCrosshair
 
     local function NeedsFrameAccurateBarrel(wep)
@@ -54,7 +55,7 @@ if CLIENT then
             muzzlePos, muzzleFwd = attData.Pos, attData.Ang:Forward()
         else
             local bone = SandSwep.BoneId(vm, "b_wpn_muzzle")
-            local matrix = bone and vm:GetBoneMatrix(bone)
+            local matrix = bone and SandSwep.Math.CopyBone(vm, bone, muzzleMat)
             local frame = vmView.GunFrame(vm, view)
             if not matrix or not frame then return end
             muzzlePos, muzzleFwd = matrix:GetTranslation(), frame.F

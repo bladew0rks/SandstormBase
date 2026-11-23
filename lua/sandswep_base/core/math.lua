@@ -12,6 +12,24 @@ local function Unit(x, y, z)
 end
 MATH.Unit = Unit
 
+local ENTITY = FindMetaTable("Entity")
+local copyBoneMatrix, getBoneMatrix = ENTITY.CopyBoneMatrix, ENTITY.GetBoneMatrix
+
+function MATH.CopyBone(ent, bone, out)
+    if bone < 0 or bone >= ent:GetBoneCount() then return end
+
+    if copyBoneMatrix then
+        copyBoneMatrix(ent, bone, out)
+        return out
+    end
+
+    local mat = getBoneMatrix(ent, bone)
+    if not mat then return end
+
+    out:Set(mat)
+    return out
+end
+
 function MATH.BlendMatrix(from, to, w, out)
     local a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12 = from:Unpack()
     local b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12 = to:Unpack()

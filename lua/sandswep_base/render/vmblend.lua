@@ -1,6 +1,7 @@
 if not CLIENT then return end
 
 local BlendMatrix = SandSwep.Math.BlendMatrix
+local CopyBone = SandSwep.Math.CopyBone
 
 local function EntrySequences(entry)
     if isstring(entry.Seq) then return { entry.Seq } end
@@ -144,7 +145,7 @@ local function BlendWeight(wep, snap)
 end
 
 local CAPTURE_INTERVAL = 1 / 120
-local base, toLocal, world = Matrix(), Matrix(), Matrix()
+local base, toLocal, world, boneMat = Matrix(), Matrix(), Matrix(), Matrix()
 
 local function CaptureRaw(vm, mats, numBones)
     local inv = mats.inv
@@ -155,7 +156,14 @@ local function CaptureRaw(vm, mats, numBones)
     inv:Set(base)
     inv:InvertTR()
 
-    for i = 0, numBones - 1 do mats[i] = vm:GetBoneMatrix(i) end
+    for i = 0, numBones - 1 do
+        local mat = mats[i]
+        if not mat then
+            mat = Matrix()
+            mats[i] = mat
+        end
+        if not CopyBone(vm, i, mat) then mats[i] = nil end
+    end
     mats.raw, mats.n = true, numBones
 end
 
@@ -197,7 +205,7 @@ function SWEP:VMBoneBlend(vm, numBones)
     if capture then current.raw = nil end
 
     for i = 0, numBones - 1 do
-        local mat = vm:GetBoneMatrix(i)
+        local mat = CopyBone(vm, i, boneMat)
         if not mat then
             if capture then current[i] = nil end
             continue

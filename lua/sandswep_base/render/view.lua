@@ -3,6 +3,7 @@ local VisualFrameTime = SandSwep.VisualFrameTime
 if not CLIENT then return end
 
 local Developer = SandSwep.BaseShared.Developer
+local CopyBone = SandSwep.Math.CopyBone
 
 local JUMP_NONE, JUMP_START, JUMP_AIR, JUMP_LAND = 0, 1, 2, 3
 local JUMP_FADE = 0.12
@@ -985,11 +986,13 @@ local function CameraBoneIds(vm)
     return cam, parent
 end
 
+local camBoneMat, camParentMat = Matrix(), Matrix()
+
 local function MeasureCameraBone(vm)
     local cam, parent = CameraBoneIds(vm)
     if not cam then return end
 
-    local camMat, parentMat = vm:GetBoneMatrix(cam), vm:GetBoneMatrix(parent)
+    local camMat, parentMat = CopyBone(vm, cam, camBoneMat), CopyBone(vm, parent, camParentMat)
     if not camMat or not parentMat then return end
 
     camMat:SetTranslation(vector_origin)

@@ -7,6 +7,7 @@ local cv = SANDTPIK.CVars
 local ENTITY = FindMetaTable("Entity")
 local entityGetBoneMatrix = ENTITY.GetBoneMatrix
 local entitySetBoneMatrix = ENTITY.SetBoneMatrix
+local copyBone = SandSwep.Math.CopyBone
 
 local FrameNumber, RealTime, CurTime, IsValid = FrameNumber, RealTime, CurTime, IsValid
 local mathClamp, mathMax, mathAbs, mathSqrt = math.Clamp, math.max, math.abs, math.sqrt
@@ -153,21 +154,22 @@ local function getChildren(ent, bone, stopBone)
     return bones
 end
 
+local applyInverse, applyTranslate, applyChild, applyOut = Matrix(), Matrix(), Matrix(), Matrix()
+
 local function applyBoneMatrix(ent, bone, newMatrix, stopBone)
-    local matrix = entityGetBoneMatrix(ent, bone)
-    if not matrix then return end
+    if not copyBone(ent, bone, applyInverse) then return end
+    if not applyInverse:Invert() then return end
 
-    local inverse = matrix:GetInverse()
-    if not inverse then return end
-
-    local translate = newMatrix * inverse
+    applyTranslate:Set(newMatrix)
+    applyTranslate:Mul(applyInverse)
     local children = getChildren(ent, bone, stopBone)
 
     for i = 1, #children do
         local id = children[i]
-        local mat = entityGetBoneMatrix(ent, id)
-        if mat then
-            entitySetBoneMatrix(ent, id, translate * mat)
+        if copyBone(ent, id, applyChild) then
+            applyOut:Set(applyTranslate)
+            applyOut:Mul(applyChild)
+            entitySetBoneMatrix(ent, id, applyOut)
         end
     end
 
@@ -271,7 +273,7 @@ end)
 
 local blendMatrix = SandSwep.Math.BlendMatrix
 
-local baseMat, toLocalMat, localMat, worldMat = Matrix(), Matrix(), Matrix(), Matrix()
+local baseMat, toLocalMat, localMat, worldMat, boneMat = Matrix(), Matrix(), Matrix(), Matrix(), Matrix()
 
 local function setFrame(ent)
     baseMat:SetTranslation(ent:GetPos())
@@ -290,7 +292,7 @@ local function snapshot(ent, state)
     setFrame(ent)
 
     for i = 0, ent:GetBoneCount() - 1 do
-        local mat = entityGetBoneMatrix(ent, i)
+        local mat = copyBone(ent, i, boneMat)
         if not mat then
             valid[i] = false
             continue
@@ -326,7 +328,7 @@ local function applyBlend(ent, state, numBones)
     for i = 0, numBones - 1 do
         if not valid[i] then continue end
 
-        local mat = entityGetBoneMatrix(ent, i)
+        local mat = copyBone(ent, i, boneMat)
         if not mat then continue end
 
         localMat:Set(toLocalMat)
@@ -1015,8 +1017,8 @@ local function applyToPlayer(ply, numBones)
     for k = 1, map.n do
         if dropLeft and left[k] then continue end
 
-        local mat = entityGetBoneMatrix(tpik, src[k])
-        if not mat or not entityGetBoneMatrix(ply, dst[k]) then continue end
+        local mat = copyBone(tpik, src[k], boneMat)
+        if not mat or not copyBone(ply, dst[k], localMat) then continue end
 
         local bonePos = mat:GetTranslation()
         bonePos.x = mathClamp(bonePos.x, spineX - clamp, spineX + clamp)

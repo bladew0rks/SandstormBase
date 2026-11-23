@@ -1,4 +1,5 @@
 local VisualFrameTime = SandSwep.VisualFrameTime
+local CopyBone = SandSwep.Math.CopyBone
 
 if not CLIENT then return end
 
@@ -30,6 +31,8 @@ SandSwep.ClearHandScale = ClearHandScale
 
 local WRIST_BONES = { "ValveBiped.Bip01_L_Wrist", "ValveBiped.Bip01_R_Wrist" }
 
+local wristMat = Matrix()
+
 local function UnsquashWrists(hands)
     local ply = LocalPlayer()
     local vm = IsValid(ply) and ply:GetViewModel()
@@ -44,7 +47,7 @@ local function UnsquashWrists(hands)
     end
 
     for _, id in ipairs(ids) do
-        local mat = hands:GetBoneMatrix(id)
+        local mat = CopyBone(hands, id, wristMat)
         if mat then
             mat:SetScale(ONE)
             hands:SetBoneMatrix(id, mat)
@@ -118,15 +121,17 @@ local function ScaleMatrixX(mat, stretch)
         0, 0, 0, 1)
 end
 
+local fitFore, fitHand = Matrix(), Matrix()
+
 local function FitSide(vm, fore, hand, length, weight, cachedStretch)
     if not fore or not length or length <= 0.01 or weight <= 0 then return nil end
 
-    local a = vm:GetBoneMatrix(fore)
+    local a = CopyBone(vm, fore, fitFore)
     if not a then return nil end
 
     local stretch = cachedStretch
     if not stretch then
-        local b = hand and vm:GetBoneMatrix(hand)
+        local b = hand and CopyBone(vm, hand, fitHand)
         if not b then return nil end
 
         local dx = a:GetField(1, 4) - b:GetField(1, 4)

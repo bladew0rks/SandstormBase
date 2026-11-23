@@ -356,16 +356,19 @@ end
 
 local PickDeltas
 
+local CopyBone = SandSwep.Math.CopyBone
+local solveMat = Matrix()
+
 local function Solve(vm, rig, deltas, alpha, fingerAlpha, thumbAlpha, unbase, aim, ctx)
     local list, parent, world, locals, solved = rig.list, rig.parent, rig.W, rig.L, rig.N
 
     for _, parentId in ipairs(rig.outside) do
-        local mat = vm:GetBoneMatrix(parentId)
+        local mat = CopyBone(vm, parentId, solveMat)
         if not mat then return false end
         Read(world[parentId], mat)
     end
     for _, i in ipairs(list) do
-        local mat = vm:GetBoneMatrix(i)
+        local mat = CopyBone(vm, i, solveMat)
         if not mat then return false end
 
         Read(world[i], mat)
@@ -419,6 +422,7 @@ local function Solve(vm, rig, deltas, alpha, fingerAlpha, thumbAlpha, unbase, ai
 end
 
 local ORIG, NEW, NEW_POOL = {}, {}, {}
+local thumbParentMat, thumbBoneMat = Matrix(), Matrix()
 
 local function SolveThumb(vm, rig, deltas, thumbAlpha)
     local locals = rig.L
@@ -437,7 +441,7 @@ local function SolveThumb(vm, rig, deltas, thumbAlpha)
     for _, delta in ipairs(thumbs) do
         local bone = delta[1]
         local parent = rig.parent[bone]
-        local parentMat, boneMat = vm:GetBoneMatrix(parent), vm:GetBoneMatrix(bone)
+        local parentMat, boneMat = CopyBone(vm, parent, thumbParentMat), CopyBone(vm, bone, thumbBoneMat)
         if not (parentMat and boneMat) then break end
 
         local parentOrig, boneOrig = ORIG[parent] or {}, ORIG[bone] or {}

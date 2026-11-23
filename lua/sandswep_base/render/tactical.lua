@@ -105,10 +105,25 @@ function SWEP:DrawVMLaser(start, dir, def)
         return
     end
 
+    local len = 120
+    local owner = self:GetOwner()
+    local beams = SandSwep.TacBeam and SandSwep.TacBeam[owner]
+    local ray = beams and beams.Laser
+    if ray then
+        local tr = util.TraceLine({ start = ray.pos, endpos = ray.pos + ray.dir * 4096, filter = owner, mask = MASK_SHOT })
+        if tr.Hit then
+            local eye, eyeAng = EyePos(), EyeAngles()
+            local scale = math.tan(math.rad(LocalPlayer():GetFOV()) * 0.5) / math.tan(math.rad(self.ViewModelFOV or 62) * 0.5)
+            local hit = WorldToLocal(tr.HitPos, angle_zero, eye, eyeAng)
+            hit.y, hit.z = hit.y / scale, hit.z / scale
+            len = math.Clamp((LocalToWorld(hit, angle_zero, eye, eyeAng) - start):Dot(dir), 0, 120)
+        end
+    end
+
     local col = def.LaserColor or LASER_DEFAULT
     render.SetMaterial(matBeam)
     beamCol.r, beamCol.g, beamCol.b = col.r, col.g, col.b
-    render.DrawBeam(start, start + dir * 120, 0.15, 0, 1, beamCol)
+    render.DrawBeam(start, start + dir * len, 0.15, 0, 1, beamCol)
 
     render.SetMaterial(matGlow)
     render.DrawSprite(start, 0.6, 0.6, col)

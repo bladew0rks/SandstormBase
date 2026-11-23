@@ -119,7 +119,7 @@ function SWEP:ApplyFireMode(idx)
         if name and self:PlayAnim(name) then self:BeginAction("fireselect", self:GetAnimLength(name)) end
     end
 
-    self:EmitSound(self.FireModeSound, 60, 100, 0.6)
+    self:EmitSound(self.FireModeSound, self.FireModeSoundLevel or 60, 100, self.FireModeSoundVolume or 0.6)
 end
 
 local CYCLE_RANK = { auto = 1, burst = 2, semi = 3 }

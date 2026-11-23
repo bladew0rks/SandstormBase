@@ -46,6 +46,7 @@ local MODULES = {
     "gameplay/movement",
     "core/think",
     "gameplay/firing",
+    "render/recoilcurves",
     "render/view",
     "render/attmodels",
     "render/vmgrip",

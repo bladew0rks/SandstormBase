@@ -489,11 +489,14 @@ function SWEP:DrawOpticOverlay(sight, aimT)
     end
 end
 
+local CopyBone = SandSwep.Math.CopyBone
+local squashRoot, squashMat, squashBone, squashOut = Matrix(), Matrix(), Matrix(), Matrix()
+
 local function SquashBones(ent, numBones)
     local squash = ent.SandSwepSquash
     if not squash or squash.s >= 0.999 then return end
 
-    local root = ent:GetBoneMatrix(0)
+    local root = CopyBone(ent, 0, squashRoot)
     if not root then return end
 
     local pos, ang = LocalToWorld(squash.pos, squash.ang, root:GetTranslation(), root:GetAngles())
@@ -509,16 +512,18 @@ local function SquashBones(ent, numBones)
     end
 
     local shift = axis * (-stretch * axis:Dot(anchor))
-    local squeeze = Matrix({
-        { 1 + stretch * axis.x * axis.x, stretch * axis.x * axis.y, stretch * axis.x * axis.z, shift.x },
-        { stretch * axis.y * axis.x, 1 + stretch * axis.y * axis.y, stretch * axis.y * axis.z, shift.y },
-        { stretch * axis.z * axis.x, stretch * axis.z * axis.y, 1 + stretch * axis.z * axis.z, shift.z },
-        { 0, 0, 0, 1 },
-    })
+    squashMat:SetUnpacked(
+        1 + stretch * axis.x * axis.x, stretch * axis.x * axis.y, stretch * axis.x * axis.z, shift.x,
+        stretch * axis.y * axis.x, 1 + stretch * axis.y * axis.y, stretch * axis.y * axis.z, shift.y,
+        stretch * axis.z * axis.x, stretch * axis.z * axis.y, 1 + stretch * axis.z * axis.z, shift.z,
+        0, 0, 0, 1)
 
     for i = 0, numBones - 1 do
-        local bone = ent:GetBoneMatrix(i)
-        if bone then ent:SetBoneMatrix(i, squeeze * bone) end
+        if CopyBone(ent, i, squashBone) then
+            squashOut:Set(squashMat)
+            squashOut:Mul(squashBone)
+            ent:SetBoneMatrix(i, squashOut)
+        end
     end
 end
 

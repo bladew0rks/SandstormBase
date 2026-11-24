@@ -265,7 +265,7 @@ function SWEP:ApplyParkedBones(vm)
     end
 end
 
-local selectorLocal, selectorWorld = Matrix(), Matrix()
+local selectorLocal, selectorWorld, selectorBone, selectorParent = Matrix(), Matrix(), Matrix(), Matrix()
 
 function SWEP:VMTubeSelector(vm)
     local cfg = self.TubeSelector
@@ -273,11 +273,12 @@ function SWEP:VMTubeSelector(vm)
 
     local bone = SandSwep.BoneId(vm, cfg.Bone)
     local parent = bone and vm:GetBoneParent(bone)
-    local mat = bone and vm:GetBoneMatrix(bone)
-    local parentMat = parent and parent >= 0 and vm:GetBoneMatrix(parent)
+    local mat = bone and CopyBone(vm, bone, selectorBone)
+    local parentMat = parent and parent >= 0 and CopyBone(vm, parent, selectorParent)
     if not mat or not parentMat then return end
 
-    selectorLocal:Set(parentMat:GetInverseTR())
+    selectorLocal:Set(parentMat)
+    selectorLocal:InvertTR()
     selectorLocal:Mul(mat)
 
     local second = self:GetTubeSwapped()

@@ -1,5 +1,7 @@
 SANDTPIK = SANDTPIK or {}
 
+local placeMat = Matrix()
+
 local function boneId(ent, name)
     if not isstring(name) or name == "" then return end
 
@@ -155,7 +157,7 @@ function SANDTPIK.DrawAttachments(wep, tpik, state, flags)
             if offset.Attachment and SandSwep.OffsetFrame then
                 framePos, frameAng = SandSwep.OffsetFrame(tpik, offset)
             else
-                local mat = bone and tpik:GetBoneMatrix(bone)
+                local mat = bone and SandSwep.Math.CopyBone(tpik, bone, placeMat)
                 if mat then framePos, frameAng = mat:GetTranslation(), mat:GetAngles() end
             end
 

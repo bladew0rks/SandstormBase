@@ -4,6 +4,7 @@ local matBeam = Material("effects/laser1")
 local matGlow = Material("sprites/light_glow02_add")
 local beamCol = Color(255, 30, 20, 90)
 local LASER_DEFAULT = Color(255, 30, 20)
+local beamBoneMat = Matrix()
 
 local function DeviceEntity(wep, def, slotName)
     local found
@@ -25,7 +26,7 @@ local function DeviceVMRay(wep, def, slotName)
     local origin = ent:GetPos()
     if def.BeamBone then
         local bone = ent:LookupBone(def.BeamBone)
-        local matrix = bone and ent:GetBoneMatrix(bone)
+        local matrix = bone and SandSwep.Math.CopyBone(ent, bone, beamBoneMat)
         if matrix then origin, entAng = matrix:GetTranslation(), matrix:GetAngles() end
     end
 

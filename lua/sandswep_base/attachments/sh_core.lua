@@ -64,6 +64,8 @@ function SandSwep.RegisterAttachment(id, def)
 end
 
 if CLIENT then
+    local offsetMat = Matrix()
+
     function SandSwep.OffsetFrame(ent, offset)
         if offset.Attachment then
             local id = ent:LookupAttachment(offset.Attachment)
@@ -72,7 +74,7 @@ if CLIENT then
         end
 
         local bone = SandSwep.BoneId and SandSwep.BoneId(ent, offset.Bone or "") or ent:LookupBone(offset.Bone or "")
-        local matrix = bone and ent:GetBoneMatrix(bone)
+        local matrix = bone and SandSwep.Math.CopyBone(ent, bone, offsetMat)
         if matrix then return matrix:GetTranslation(), matrix:GetAngles() end
     end
 

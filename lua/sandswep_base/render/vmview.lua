@@ -1,6 +1,7 @@
 if not CLIENT then return end
 
 local AXIS_X, AXIS_Y, AXIS_Z = Vector(1, 0, 0), Vector(0, 1, 0), Vector(0, 0, 1)
+local muzzleMat = Matrix()
 
 local renderView, renderFrame, renderWep
 local nonRenderView = {}
@@ -74,7 +75,7 @@ local function GunFrame(vm, view)
     up:Normalize()
 
     local muzzleBone = SandSwep.BoneId(vm, "b_wpn_muzzle")
-    local muzzle = muzzleBone and vm:GetBoneMatrix(muzzleBone)
+    local muzzle = muzzleBone and SandSwep.Math.CopyBone(vm, muzzleBone, muzzleMat)
     if muzzle then
         local toMuzzle = muzzle:GetTranslation() - origin
         if toMuzzle:LengthSqr() > 1 then

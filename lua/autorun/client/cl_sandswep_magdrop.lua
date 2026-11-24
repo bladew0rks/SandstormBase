@@ -62,11 +62,19 @@ local function RoundMatrix(entry)
 end
 
 local shown, shownStamp = {}, 0
-local roundTmp, hiddenTmp = Matrix(), Matrix()
+local roundTmp, hiddenTmp, magTmp = Matrix(), Matrix(), Matrix()
+local dropMag, dropWpn, dropRel = Matrix(), Matrix(), Matrix()
+
+local function DropRelative(wpnMat, magMat)
+    dropRel:Set(wpnMat)
+    dropRel:InvertTR()
+    dropRel:Mul(magMat)
+    return dropRel:GetTranslation()
+end
 
 function SandSwep.PoseMagRounds(ent, data, spent)
     local magId = SandSwep.BoneId(ent, "b_wpn_mag")
-    local mag = magId and ent:GetBoneMatrix(magId)
+    local mag = magId and SandSwep.Math.CopyBone(ent, magId, magTmp)
     if not mag then return end
 
     local ids = ent.SandSwepRoundIds
@@ -402,7 +410,8 @@ hook.Add("PostDrawViewModel", "SandSwep_MagDrop", function(vm, ply, wep)
     state.frame = FrameNumber()
 
     local magBone, wpnBone = SandSwep.BoneId(vm, "b_wpn_mag"), SandSwep.BoneId(vm, "b_wpn")
-    local magMat, wpnMat = magBone and vm:GetBoneMatrix(magBone), wpnBone and vm:GetBoneMatrix(wpnBone)
+    local magMat = magBone and SandSwep.Math.CopyBone(vm, magBone, dropMag)
+    local wpnMat = wpnBone and SandSwep.Math.CopyBone(vm, wpnBone, dropWpn)
     if not magMat or not wpnMat then return end
 
     local vmView = SandSwep.VMView
@@ -414,7 +423,7 @@ hook.Add("PostDrawViewModel", "SandSwep_MagDrop", function(vm, ply, wep)
     local magPos = magMat:GetTranslation()
     local sample = {
         t = UnPredictedCurTime(),
-        rel = (wpnMat:GetInverseTR() * magMat):GetTranslation(),
+        rel = DropRelative(wpnMat, magMat),
         eye = WorldToLocal(magPos, angle_zero, view.origin, view.ang),
         pos = vmView.ToWorld(magPos, view),
         ang = magMat:GetAngles(),

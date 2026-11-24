@@ -124,7 +124,3 @@ function SandSwep.GetSequenceData(model, seq)
     local seqs = SandSwep.GetModelSequences(model)
     return seqs[seq] or seqs[string.lower(seq)]
 end
-
-function SandSwep.ClearModelSequenceCache()
-    cache = {}
-end

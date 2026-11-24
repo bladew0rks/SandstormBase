@@ -297,22 +297,6 @@ function SWEP:HasMagRoom(count)
     return self.MaxMags <= 0 or count < self.MaxMags
 end
 
-function SWEP:AddMags(count, rounds)
-    local size = self:GetMagSize()
-    rounds = rounds or size
-
-    local mags = table.Copy(self:GetMags())
-    local added = 0
-    for _ = 1, count do
-        if not self:HasMagRoom(#mags) then break end
-        mags[#mags + 1] = math.min(rounds, size)
-        added = added + 1
-    end
-
-    self:SetMags(mags)
-    return added
-end
-
 function SWEP:Resupply()
     local count = self.MaxMags > 0 and self.MaxMags or math.max(self.StartingMags, #self:GetMags())
     local mags = {}

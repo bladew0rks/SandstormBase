@@ -478,22 +478,6 @@ function SWEP:GetFeatureDef(feature)
     if found then return found[1], found[2] end
 end
 
-function SWEP:GetTacticalDef()
-    local cache = self:AttCache()
-
-    if cache.tac == nil then
-        cache.tac = false
-        for slotName, _, def in self:IterAttachments() do
-            if def.Laser or def.Light then
-                cache.tac = { def, slotName }
-                break
-            end
-        end
-    end
-
-    if cache.tac then return cache.tac[1], cache.tac[2] end
-end
-
 function SWEP:GetTacticalOn()
     return self:GetLaserOn() or self:GetLightOn()
 end

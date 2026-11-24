@@ -256,10 +256,6 @@ function SWEP:StartMelee()
     return self:StartAction("melee")
 end
 
-function SWEP:IsMeleeing()
-    return self:IsInAction("melee")
-end
-
 function SWEP:DoMeleeHit()
     local owner = self:GetOwner()
     if not IsValid(owner) then return end

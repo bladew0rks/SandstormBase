@@ -594,11 +594,6 @@ local function HasGCAL()
     return istable(GCAL) and isfunction(GCAL.RegisterWeaponBaseStrategy)
 end
 
-function SandSwep.VManipActive()
-    local vmanip = VManip
-    return istable(vmanip) and IsValid(vmanip.VMGesture) and vmanip.IsValid ~= nil and vmanip:IsValid() or false
-end
-
 local ARM_PARTS = { "Clavicle", "UpperArm", "Forearm", "Ulna", "Wrist", "Hand", "Finger" }
 
 local function ArmSide(name)

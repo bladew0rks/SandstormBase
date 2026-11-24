@@ -401,6 +401,8 @@ local function getPropBones(wep, tpik, state)
     return bones
 end
 
+local propMat = Matrix()
+
 local function hideParkedProps(wep, tpik, state)
     local bones = getPropBones(wep, tpik, state)
     local count = #bones
@@ -417,7 +419,7 @@ local function hideParkedProps(wep, tpik, state)
         local hide = bone.always
 
         if not hide then
-            local mat = entityGetBoneMatrix(tpik, bone.index)
+            local mat = copyBone(tpik, bone.index, propMat)
             if mat then
                 local bonePos = mat:GetTranslation()
                 local depth = (bonePos.x - originX) * fwdX
@@ -872,15 +874,17 @@ concommand.Add("sandswep_tpik_dump", function(_, _, args)
     print("[sandswep_tpik] recording the left arm for " .. seconds .. " seconds")
 end)
 
+local armUpper, armFore, armHand, armUlna = Matrix(), Matrix(), Matrix(), Matrix()
+
 local function solveArmPole(ply, side, bones, outward, limbUpper, limbFore, scale, gunAng)
     local upperIdx = getBone(ply, bones.UpperArm)
     local foreIdx = getBone(ply, bones.Forearm)
     local handIdx = getBone(ply, bones.Hand)
     if not upperIdx or not foreIdx or not handIdx then return false end
 
-    local upperMat = entityGetBoneMatrix(ply, upperIdx)
-    local foreMat = entityGetBoneMatrix(ply, foreIdx)
-    local handMat = entityGetBoneMatrix(ply, handIdx)
+    local upperMat = copyBone(ply, upperIdx, armUpper)
+    local foreMat = copyBone(ply, foreIdx, armFore)
+    local handMat = copyBone(ply, handIdx, armHand)
     if not upperMat or not foreMat or not handMat then return false end
 
     local rootPos = upperMat:GetTranslation()
@@ -929,7 +933,7 @@ local function solveArmPole(ply, side, bones, outward, limbUpper, limbFore, scal
     applyBoneMatrix(ply, foreIdx, foreMat, handIdx)
 
     local ulnaIdx = bones.Ulna and getBone(ply, bones.Ulna)
-    local ulnaMat = ulnaIdx and entityGetBoneMatrix(ply, ulnaIdx)
+    local ulnaMat = ulnaIdx and copyBone(ply, ulnaIdx, armUlna)
     if ulnaMat then
         local ulnaAng = ulnaMat:GetAngles()
         twistToward(side, ulnaAng, foreDir, handMat:GetUp())
@@ -979,6 +983,8 @@ end
 
 local handScale = Vector(1, 1, 1)
 
+local spineScratch, headScratch = Matrix(), Matrix()
+
 local function applyToPlayer(ply, numBones)
     local data = ply.SandTPIK_Active
     if not data then return end
@@ -1000,7 +1006,7 @@ local function applyToPlayer(ply, numBones)
     end
 
     local spineIdx = getBone(ply, SANDTPIK.SpineBone) or getBone(ply, "ValveBiped.Bip01_Spine2")
-    local spineMat = spineIdx and entityGetBoneMatrix(ply, spineIdx)
+    local spineMat = spineIdx and copyBone(ply, spineIdx, spineScratch)
     local spinePos = spineMat and spineMat:GetTranslation() or ply:GetPos() + Vector(0, 0, 48)
     local spineX, spineY, spineZ = spinePos.x, spinePos.y, spinePos.z
     local clamp = SANDTPIK.BoneClamp
@@ -1039,7 +1045,7 @@ local function applyToPlayer(ply, numBones)
 
     local eyeLocal = state.eyeLocal
     local headIdx = eyeLocal and getBone(ply, SANDTPIK.HeadBone)
-    local headMat = headIdx and entityGetBoneMatrix(ply, headIdx)
+    local headMat = headIdx and copyBone(ply, headIdx, headScratch)
 
     if headMat then
         ply.SandTPIK_EyeOffset = WorldToLocal(headMat * eyeLocal, angle_zero, ply:GetPos(), ply:GetRenderAngles())

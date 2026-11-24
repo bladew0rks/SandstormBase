@@ -105,6 +105,8 @@ local function ActiveSource(src, edit)
 end
 
 local handScratch = {}
+local CopyBone = SandSwep.Math.CopyBone
+local wpnScratch, fgScratch, handBoneScratch, upScratch, foreScratch, turnScratch = Matrix(), Matrix(), Matrix(), Matrix(), Matrix(), Matrix()
 
 function SWEP:VMHandPose(vm)
     local src, key = self:GetHandPoseSource()
@@ -117,7 +119,9 @@ function SWEP:VMHandPose(vm)
     local bones = BoneSet(vm)
     if bones.missing then return end
 
-    local wpnM, fgM, handM = vm:GetBoneMatrix(bones.wpn), vm:GetBoneMatrix(bones.fg), vm:GetBoneMatrix(bones.hand)
+    local wpnM = CopyBone(vm, bones.wpn, wpnScratch)
+    local fgM = CopyBone(vm, bones.fg, fgScratch)
+    local handM = CopyBone(vm, bones.hand, handBoneScratch)
     if not (wpnM and fgM and handM) then return end
 
     local wrist = handM:GetTranslation()
@@ -141,9 +145,16 @@ function SWEP:VMHandPose(vm)
     if weight <= 0 then return end
 
     local delta = wpnM:GetUp() * (-(pose.LeftHandDrop or 0) * weight)
-    local handMats = bones.handMats or {}
-    bones.handMats = handMats
-    for _, bone in ipairs(bones.handTree) do handMats[bone] = vm:GetBoneMatrix(bone) end
+    local handMats, handStore = bones.handMats or {}, bones.handStore or {}
+    bones.handMats, bones.handStore = handMats, handStore
+    for _, bone in ipairs(bones.handTree) do
+        local store = handStore[bone]
+        if not store then
+            store = Matrix()
+            handStore[bone] = store
+        end
+        handMats[bone] = CopyBone(vm, bone, store)
+    end
 
     local _, w12, _, _, _, w22, _, _, _, w32 = wpnM:Unpack()
     local barrel = Vector(-w12, -w22, -w32)
@@ -184,7 +195,7 @@ function SWEP:VMHandPose(vm)
         wrist = newWrist
     end
 
-    local upM, foreM = vm:GetBoneMatrix(bones.up), vm:GetBoneMatrix(bones.fore)
+    local upM, foreM = CopyBone(vm, bones.up, upScratch), CopyBone(vm, bones.fore, foreScratch)
     if not (upM and foreM) then return end
 
     local origWrist = handM:GetTranslation()
@@ -208,7 +219,7 @@ function SWEP:VMHandPose(vm)
     local axis, cos, sin = Between(elbow - shoulder, newElbow - shoulder)
     if axis then
         for _, bone in ipairs(bones.upTree) do
-            local mat = vm:GetBoneMatrix(bone)
+            local mat = CopyBone(vm, bone, turnScratch)
             if mat then vm:SetBoneMatrix(bone, Turn(mat, axis, cos, sin, shoulder)) end
         end
     end
@@ -217,7 +228,7 @@ function SWEP:VMHandPose(vm)
     axis, cos, sin = Between(turnedWrist - newElbow, target - newElbow)
     if axis then
         for _, bone in ipairs(bones.foreTree) do
-            local mat = vm:GetBoneMatrix(bone)
+            local mat = CopyBone(vm, bone, turnScratch)
             if mat then vm:SetBoneMatrix(bone, Turn(mat, axis, cos, sin, newElbow)) end
         end
     end
@@ -227,14 +238,14 @@ function SWEP:VMHandPose(vm)
         local rad = math.rad(pose.LeftForearmRoll * weight)
         local rollCos, rollSin = math.cos(rad), math.sin(rad)
         for _, bone in ipairs(bones.foreTree) do
-            local mat = vm:GetBoneMatrix(bone)
+            local mat = CopyBone(vm, bone, turnScratch)
             if mat then vm:SetBoneMatrix(bone, Turn(mat, foreAxis, rollCos, rollSin, newElbow)) end
         end
     end
 
     if (pose.LeftWristTwist or 0) ~= 0 then
         for i, bone in ipairs(bones.twist) do
-            local mat = vm:GetBoneMatrix(bone)
+            local mat = CopyBone(vm, bone, turnScratch)
             if mat then
                 local rad = math.rad(pose.LeftWristTwist * weight * i / #bones.twist)
                 vm:SetBoneMatrix(bone, Turn(mat, foreAxis, math.cos(rad), math.sin(rad), newElbow))
@@ -668,27 +679,31 @@ function SandSwep.AnimatedHands()
     return restWeight
 end
 
+local blendCur, blendTarget = Matrix(), Matrix()
+
 local function BlendBones(vm, model, bones, sources, weight)
     for k, name in ipairs(bones) do
         local srcName = sources and sources[k] or name
         if srcName == "ValveBiped.Bip01_L_Ulna" then srcName = "ValveBiped.Bip01_L_Forearm" end
         if srcName == "ValveBiped.Bip01_R_Ulna" then srcName = "ValveBiped.Bip01_R_Forearm" end
 
-        local bone = vm:LookupBone(name)
-        local src = bone and model:LookupBone(srcName)
-        local cur = src and vm:GetBoneMatrix(bone)
-        local target = cur and model:GetBoneMatrix(src)
+        local bone = SandSwep.BoneId(vm, name)
+        local src = bone and SandSwep.BoneId(model, srcName)
+        local cur = src and CopyBone(vm, bone, blendCur)
+        local target = cur and CopyBone(model, src, blendTarget)
 
         if target then
-            local a, b = target:ToTable(), cur:ToTable()
-            for r = 1, 4 do
-                local ra, rb = a[r], b[r]
-                for c = 1, 4 do ra[c] = ra[c] + (rb[c] - ra[c]) * weight end
-            end
+            local a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16 = target:Unpack()
+            local b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12, b13, b14, b15, b16 = cur:Unpack()
+            local scale = cur:GetScale()
 
-            local out = Matrix(a)
-            out:SetScale(cur:GetScale())
-            vm:SetBoneMatrix(bone, out)
+            target:SetUnpacked(
+                a1 + (b1 - a1) * weight, a2 + (b2 - a2) * weight, a3 + (b3 - a3) * weight, a4 + (b4 - a4) * weight,
+                a5 + (b5 - a5) * weight, a6 + (b6 - a6) * weight, a7 + (b7 - a7) * weight, a8 + (b8 - a8) * weight,
+                a9 + (b9 - a9) * weight, a10 + (b10 - a10) * weight, a11 + (b11 - a11) * weight, a12 + (b12 - a12) * weight,
+                a13 + (b13 - a13) * weight, a14 + (b14 - a14) * weight, a15 + (b15 - a15) * weight, a16 + (b16 - a16) * weight)
+            target:SetScale(scale)
+            vm:SetBoneMatrix(bone, target)
         end
     end
 end

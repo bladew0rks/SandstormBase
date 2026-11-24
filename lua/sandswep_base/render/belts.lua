@@ -110,16 +110,19 @@ local function PushOutOfCapsules(node, capsules)
     end
 end
 
+local CopyBone = SandSwep.Math.CopyBone
+local capA, capB, feedMat, liveMat = Matrix(), Matrix(), Matrix(), Matrix()
+
 local function AvoidCapsules(cfg, vm, radius)
     local capsules = {}
 
     for _, spec in ipairs(cfg.AvoidBones or {}) do
         local boneA = SandSwep.BoneId(vm, spec[1])
-        local matA = boneA and vm:GetBoneMatrix(boneA)
+        local matA = boneA and CopyBone(vm, boneA, capA)
 
         if matA then
             local boneB = spec[2] and SandSwep.BoneId(vm, spec[2])
-            local matB = boneB and vm:GetBoneMatrix(boneB)
+            local matB = boneB and CopyBone(vm, boneB, capB)
             capsules[#capsules + 1] = {
                 matA:GetTranslation(),
                 matB and matB:GetTranslation() or matA:GetTranslation(),
@@ -587,7 +590,7 @@ end
 
 local function LiveFeedDir(cfg, vm, frame, start, boneAng)
     local bone2 = SandSwep.BoneId(vm, "b_wpn_mag_b2")
-    local mat2 = bone2 and vm:GetBoneMatrix(bone2)
+    local mat2 = bone2 and CopyBone(vm, bone2, feedMat)
 
     local dir
     if mat2 then dir = mat2:GetTranslation() - start end
@@ -624,7 +627,7 @@ local function DrawLiveBelt(wep, vm, info)
 
     local rounds = wep:GetLiveBeltRounds()
     local bone1 = SandSwep.BoneId(vm, "b_wpn_mag_b1")
-    local mat1 = bone1 and vm:GetBoneMatrix(bone1)
+    local mat1 = bone1 and CopyBone(vm, bone1, liveMat)
     local frame = view.GunFrame(vm, info)
 
     if not mat1 or not frame or rounds <= 0 then

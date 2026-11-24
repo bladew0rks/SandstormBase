@@ -743,22 +743,6 @@ local TWIST_LIMIT = 180
 local TWIST_RESET_FRAMES = 5
 local cvUlnaWeight = CreateClientConVar("cl_sandswep_tpik_ulna_twist", "0.5", true, false, "Share of the hand roll carried by the forearm twist bone", 0, 1)
 
-local function alignForward(ang, fromDir, toDir)
-    local from, to = fromDir:GetNormalized(), toDir:GetNormalized()
-    local cos = from:Dot(to)
-    local axis = from:Cross(to)
-    local sin = axis:Length()
-
-    if sin < 1e-6 then
-        if cos > 0 then return end
-        axis, sin = ang:Up(), 0
-    else
-        axis:Div(sin)
-    end
-
-    ang:RotateAroundAxis(axis, math.deg(math.atan2(sin, cos)))
-end
-
 local function rotateOnto(x, y, z, w, fx, fy, fz, tx, ty, tz)
     fx, fy, fz = Unit(fx, fy, fz)
     tx, ty, tz = Unit(tx, ty, tz)
@@ -931,7 +915,6 @@ local function solveArmPole(ply, side, bones, outward, limbUpper, limbFore, scal
     local elbowPos, handPos = SANDTPIK.SolvePoleIK(rootPos, targetPos, poleDir,
         bodyDir, bodyWeight, limbUpper * scale, limbFore * scale)
 
-    local upperAnimAng, foreAnimAng = upperMat:GetAngles(), foreMat:GetAngles()
     local upperDir, foreDir = elbowPos - rootPos, handPos - elbowPos
 
     local animX, animY, animZ, animW = QuatFromMatrix(upperMat)
@@ -941,25 +924,25 @@ local function solveArmPole(ply, side, bones, outward, limbUpper, limbFore, scal
     local x, y, z, w = rotateOnto(animX, animY, animZ, animW, auX, auY, auZ, upperDir.x, upperDir.y, upperDir.z)
     x, y, z, w = alignHinge(x, y, z, w, animX, animY, animZ, animW, auX, auY, auZ, afX, afY, afZ,
         upperDir.x, upperDir.y, upperDir.z, foreDir.x, foreDir.y, foreDir.z)
-    local upperAng = Angle(MATH.QuatToAngles(x, y, z, w))
 
-    local _, relAng = WorldToLocal(vector_origin, foreAnimAng, vector_origin, upperAnimAng)
-    local _, foreAng = LocalToWorld(vector_origin, relAng, vector_origin, upperAng)
-    alignForward(foreAng, foreAng:Forward(), foreDir)
+    local rx, ry, rz, rw = QuatMul(-animX, -animY, -animZ, animW, foreX, foreY, foreZ, foreW)
+    local ox, oy, oz, ow = QuatMul(x, y, z, w, rx, ry, rz, rw)
+    local ofX, ofY, ofZ = QuatRotate(ox, oy, oz, ow, 1, 0, 0)
+    ox, oy, oz, ow = rotateOnto(ox, oy, oz, ow, ofX, ofY, ofZ, foreDir.x, foreDir.y, foreDir.z)
 
     if dump then
         recordArm(ply, bones, {
             root = dumpVec(rootPos), animElbow = dumpVec(foreMat:GetTranslation()), target = dumpVec(handMat:GetTranslation()),
             elbow = dumpVec(elbowPos), hand = dumpVec(handPos), bodyDir = dumpVec(bodyDir), bodyWeight = bodyWeight,
-            upperAnim = dumpAng(upperMat:GetAngles()), upperNew = dumpAng(upperAng),
-            foreAnim = dumpAng(foreMat:GetAngles()), foreNew = dumpAng(foreAng), handAng = dumpAng(handMat:GetAngles()),
+            upperAnim = dumpAng(upperMat:GetAngles()), upperNew = { MATH.QuatToAngles(x, y, z, w) },
+            foreAnim = dumpAng(foreMat:GetAngles()), foreNew = { MATH.QuatToAngles(ox, oy, oz, ow) }, handAng = dumpAng(handMat:GetAngles()),
             twist = side.poleTwist, ulnaTwist = side.ulnaTwist, limbs = { limbUpper * scale, limbFore * scale },
         })
     end
 
     setRotation(upperMat, x, y, z, w)
+    setRotation(foreMat, ox, oy, oz, ow)
     foreMat:SetTranslation(elbowPos)
-    foreMat:SetAngles(foreAng)
 
     applyBoneMatrix(ply, upperIdx, upperMat, foreIdx)
     applyBoneMatrix(ply, foreIdx, foreMat, handIdx)

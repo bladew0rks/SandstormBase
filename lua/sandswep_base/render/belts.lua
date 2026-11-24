@@ -370,11 +370,9 @@ local function CollideAttached(sim, cfg, info, ply)
 
     for i = 2, #nodes do
         local node = nodes[i]
-        local worldNew = view.ToWorld(node.p, info)
-        local worldOld = node.w or worldNew
-        if worldOld:DistToSqr(worldNew) > 60 * 60 then worldOld = worldNew end
+        if not node.c then continue end
 
-        collideIn.start, collideIn.endpos = worldOld, worldNew
+        collideIn.start, collideIn.endpos = view.ToWorld(node.c, info), view.ToWorld(node.p, info)
         util.TraceLine(collideIn)
 
         if collideOut.Hit and not collideOut.StartSolid then
@@ -384,12 +382,6 @@ local function CollideAttached(sim, cfg, info, ply)
 
             local normal = collideOut.HitNormal
             node.o = node.p - (vel - normal * vel:Dot(normal)) * 0.3
-            node.w = hit
-        elseif collideOut.StartSolid and node.w then
-            node.p = view.ToVM(node.w, info)
-            node.o = node.p
-        else
-            node.w = worldNew
         end
     end
 end
@@ -433,6 +425,11 @@ local function FollowGun(sim, frame, inertia, snap, info)
 
     sim.lastM = sim.lastM or Matrix()
     sim.lastM:Set(frame.m)
+
+    for _, node in ipairs(sim.nodes) do
+        node.c = node.c or Vector()
+        node.c:Set(node.p)
+    end
 end
 
 local function Integrate(sim, cfg, frame, vm, pin, dir, pitch)

@@ -759,44 +759,58 @@ local function alignForward(ang, fromDir, toDir)
     ang:RotateAroundAxis(axis, math.deg(math.atan2(sin, cos)))
 end
 
+local function rotateOnto(x, y, z, w, fx, fy, fz, tx, ty, tz)
+    fx, fy, fz = Unit(fx, fy, fz)
+    tx, ty, tz = Unit(tx, ty, tz)
+
+    local cos = fx * tx + fy * ty + fz * tz
+    local ax, ay, az, sin = Unit(fy * tz - fz * ty, fz * tx - fx * tz, fx * ty - fy * tx)
+    if sin < 1e-6 then
+        if cos > 0 then return x, y, z, w end
+        ax, ay, az = QuatRotate(x, y, z, w, 0, 0, 1)
+        sin = 0
+    end
+
+    local qx, qy, qz, qw = QuatAxisAngle(ax, ay, az, math.atan2(sin, cos))
+    return QuatMul(qx, qy, qz, qw, x, y, z, w)
+end
+
 local HINGE_MIN_SIN = 0.05
 local HINGE_FULL_SIN = 0.2
 
-local function axisComponents(dir, ang)
-    return dir:Dot(ang:Forward()), dir:Dot(ang:Right()), dir:Dot(ang:Up())
-end
-
-local function fromComponents(f, r, u, ang)
-    return ang:Forward() * f + ang:Right() * r + ang:Up() * u
-end
-
-local function bendSin(a, b)
-    local la, lb = a:Length(), b:Length()
+local function bendSin(ax, ay, az, bx, by, bz)
+    local la, lb = mathSqrt(ax * ax + ay * ay + az * az), mathSqrt(bx * bx + by * by + bz * bz)
     if la < 1e-6 or lb < 1e-6 then return 0 end
 
-    return a:Cross(b):Length() / (la * lb)
+    local cx, cy, cz = ay * bz - az * by, az * bx - ax * bz, ax * by - ay * bx
+    return mathSqrt(cx * cx + cy * cy + cz * cz) / (la * lb)
 end
 
-local function alignHinge(ang, animAng, animUpperDir, animForeDir, upperDir, foreDir)
-    local weight = math.min(
-        mathClamp((bendSin(animUpperDir, animForeDir) - HINGE_MIN_SIN) / (HINGE_FULL_SIN - HINGE_MIN_SIN), 0, 1),
-        mathClamp((bendSin(upperDir, foreDir) - HINGE_MIN_SIN) / (HINGE_FULL_SIN - HINGE_MIN_SIN), 0, 1))
-    if weight <= 0 then return end
+local function hingeWeight(sin)
+    return mathClamp((sin - HINGE_MIN_SIN) / (HINGE_FULL_SIN - HINGE_MIN_SIN), 0, 1)
+end
 
-    local axis = upperDir:GetNormalized()
-    local f, r, u = axisComponents(animUpperDir:Cross(animForeDir), animAng)
-    local current = fromComponents(f, r, u, ang)
-    local target = upperDir:Cross(foreDir)
+local function alignHinge(x, y, z, w, animX, animY, animZ, animW, auX, auY, auZ, afX, afY, afZ, uX, uY, uZ, fX, fY, fZ)
+    local weight = math.min(hingeWeight(bendSin(auX, auY, auZ, afX, afY, afZ)), hingeWeight(bendSin(uX, uY, uZ, fX, fY, fZ)))
+    if weight <= 0 then return x, y, z, w end
 
-    current:Sub(axis * current:Dot(axis))
-    target:Sub(axis * target:Dot(axis))
-    if current:LengthSqr() < 1e-8 or target:LengthSqr() < 1e-8 then return end
+    local ax, ay, az = Unit(uX, uY, uZ)
+    local lx, ly, lz = QuatRotate(-animX, -animY, -animZ, animW, auY * afZ - auZ * afY, auZ * afX - auX * afZ, auX * afY - auY * afX)
+    local cx, cy, cz = QuatRotate(x, y, z, w, lx, ly, lz)
+    local tx, ty, tz = uY * fZ - uZ * fY, uZ * fX - uX * fZ, uX * fY - uY * fX
 
-    current:Normalize()
-    target:Normalize()
+    local dot = cx * ax + cy * ay + cz * az
+    cx, cy, cz = cx - ax * dot, cy - ay * dot, cz - az * dot
+    dot = tx * ax + ty * ay + tz * az
+    tx, ty, tz = tx - ax * dot, ty - ay * dot, tz - az * dot
+    if cx * cx + cy * cy + cz * cz < 1e-8 or tx * tx + ty * ty + tz * tz < 1e-8 then return x, y, z, w end
 
-    local roll = math.deg(math.atan2(axis:Dot(current:Cross(target)), current:Dot(target)))
-    ang:RotateAroundAxis(axis, roll * weight)
+    cx, cy, cz = Unit(cx, cy, cz)
+    tx, ty, tz = Unit(tx, ty, tz)
+
+    local roll = math.atan2(ax * (cy * tz - cz * ty) + ay * (cz * tx - cx * tz) + az * (cx * ty - cy * tx), cx * tx + cy * ty + cz * tz)
+    local qx, qy, qz, qw = QuatAxisAngle(ax, ay, az, roll * weight)
+    return QuatMul(qx, qy, qz, qw, x, y, z, w)
 end
 
 local function setRotation(mat, x, y, z, w)
@@ -920,9 +934,14 @@ local function solveArmPole(ply, side, bones, outward, limbUpper, limbFore, scal
     local upperAnimAng, foreAnimAng = upperMat:GetAngles(), foreMat:GetAngles()
     local upperDir, foreDir = elbowPos - rootPos, handPos - elbowPos
 
-    local upperAng = Angle(upperAnimAng.p, upperAnimAng.y, upperAnimAng.r)
-    alignForward(upperAng, upperAnimAng:Forward(), upperDir)
-    alignHinge(upperAng, upperAnimAng, upperAnimAng:Forward(), foreAnimAng:Forward(), upperDir, foreDir)
+    local animX, animY, animZ, animW = QuatFromMatrix(upperMat)
+    local auX, auY, auZ = QuatRotate(animX, animY, animZ, animW, 1, 0, 0)
+    local foreX, foreY, foreZ, foreW = QuatFromMatrix(foreMat)
+    local afX, afY, afZ = QuatRotate(foreX, foreY, foreZ, foreW, 1, 0, 0)
+    local x, y, z, w = rotateOnto(animX, animY, animZ, animW, auX, auY, auZ, upperDir.x, upperDir.y, upperDir.z)
+    x, y, z, w = alignHinge(x, y, z, w, animX, animY, animZ, animW, auX, auY, auZ, afX, afY, afZ,
+        upperDir.x, upperDir.y, upperDir.z, foreDir.x, foreDir.y, foreDir.z)
+    local upperAng = Angle(MATH.QuatToAngles(x, y, z, w))
 
     local _, relAng = WorldToLocal(vector_origin, foreAnimAng, vector_origin, upperAnimAng)
     local _, foreAng = LocalToWorld(vector_origin, relAng, vector_origin, upperAng)
@@ -938,7 +957,7 @@ local function solveArmPole(ply, side, bones, outward, limbUpper, limbFore, scal
         })
     end
 
-    upperMat:SetAngles(upperAng)
+    setRotation(upperMat, x, y, z, w)
     foreMat:SetTranslation(elbowPos)
     foreMat:SetAngles(foreAng)
 

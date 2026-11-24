@@ -245,12 +245,10 @@ local function UpdateVisibility(wep)
     end
 
     local visible = cvAlways:GetBool() or now < state.showUntil
-    state.alpha = math.Approach(state.alpha, visible and 1 or 0,
-        VisualFrameTime() / (visible and FADE_IN or FADE_OUT))
+    state.alpha = SandSwep.Math.Lerp(state.alpha, visible and 1 or 0, visible and FADE_IN or FADE_OUT)
 
     local modeVisible = now < state.modeUntil
-    state.modeAlpha = math.Approach(state.modeAlpha, modeVisible and 1 or 0,
-        VisualFrameTime() / (modeVisible and FADE_IN or FADE_OUT))
+    state.modeAlpha = SandSwep.Math.Lerp(state.modeAlpha, modeVisible and 1 or 0, modeVisible and FADE_IN or FADE_OUT)
 
     return state.alpha, state.modeAlpha
 end
@@ -262,7 +260,7 @@ local function Smooth(key, target)
         return target
     end
 
-    cur = Lerp(math.min(VisualFrameTime() * 14, 1), cur, target)
+    cur = SandSwep.Math.Damp(cur, target, 14)
     if math.abs(cur - target) < 0.002 then cur = target end
     state.smooth[key] = cur
 

@@ -835,7 +835,7 @@ function SWEP:UpdatePointAimProgress()
     end
 
     local time = self.PointAimTime or 0
-    local ramp = time > 0 and math.Approach(self._pointRamp, target, dt / time) or target
+    local ramp = time > 0 and SandSwep.Math.Lerp(self._pointRamp, target, time, dt) or target
     self._pointRamp = ramp
     local goal = Smoothstep(ramp)
 
@@ -1064,8 +1064,7 @@ function SWEP:GetSightMagnification(sight)
             return zoom.cur
         end
 
-        local blend = 1 - math.exp(-VisualFrameTime() * (self.VariableZoomSpeed or 12))
-        zoom.cur = math.exp(Lerp(blend, math.log(zoom.cur), math.log(zoom.target)))
+        zoom.cur = math.exp(SandSwep.Math.Damp(math.log(zoom.cur), math.log(zoom.target), self.VariableZoomSpeed or 12))
         if math.abs(math.log(zoom.cur / zoom.target)) < 0.01 then zoom.cur = zoom.target end
     end
 

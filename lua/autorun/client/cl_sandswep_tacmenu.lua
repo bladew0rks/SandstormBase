@@ -193,7 +193,7 @@ local function OpenMenu(wep)
         if inZone then self.branchUntil = RealTime() + 0.3 end
 
         local want = RealTime() < self.branchUntil and 1 or 0
-        self.branch = math.Approach(self.branch, want, VisualFrameTime() / 0.12)
+        self.branch = SandSwep.Math.Lerp(self.branch, want, 0.12)
 
         local clean = Clean(self.sel, layout.caps)
         if clean ~= self.sel then self.sel = clean end

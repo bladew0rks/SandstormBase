@@ -40,30 +40,15 @@ function SWEP:GetSeqBlends()
     return self._blendSeqs
 end
 
-local function SequenceName(wep, vm, seq)
-    local cache = wep._seqNames
-    local model = vm:GetModel()
-    if not cache or cache.model ~= model then
-        cache = { model = model }
-        wep._seqNames = cache
-    end
-
-    local name = cache[seq]
-    if not name then
-        name = string.lower(vm:GetSequenceName(seq) or "")
-        cache[seq] = name
-    end
-
-    return name
-end
+local SequenceName = SandSwep.SequenceName
 
 function SWEP:GetSeqBlendIn(vm, seq, prevSeq)
     local blends = self:GetSeqBlends()
-    local own = blends.In[SequenceName(self, vm, seq)]
+    local own = blends.In[SequenceName(vm, seq)]
     if own then return own end
     if not prevSeq then return end
 
-    local prev = SequenceName(self, vm, prevSeq)
+    local prev = SequenceName(vm, prevSeq)
     if blends.Out[prev] then return blends.Out[prev] end
     if string.EndsWith(prev, "_start") then return self.ReloadStageBlend end
     if string.find(prev, "sprint", 1, true) and not string.EndsWith(prev, "_in") then

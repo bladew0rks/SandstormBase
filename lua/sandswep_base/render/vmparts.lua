@@ -352,7 +352,7 @@ function SWEP:GLRoundVisible(vm)
     if not self:GetGLConfig() or self:GetGLLoaded() then return true end
     if not self:IsInAction("glreload") then return false end
 
-    local data = SandSwep.GetSequenceData(self.ViewModel, vm:GetSequenceName(vm:GetSequence()))
+    local data = SandSwep.GetSequenceData(self.ViewModel, SandSwep.SequenceName(vm))
     local mark = data and data.marks and data.marks.glround
 
     return not mark or vm:GetCycle() >= mark

@@ -103,7 +103,7 @@ if CLIENT then
                 + (muzzlePos.z - vmPos.z) * vmFwd.z
             if reach > 4 then
                 reach = math.Clamp(reach, wall.MinReach, wall.MaxReach)
-                wep._wallReach = wep._wallReach and Lerp(math.min(5 * RealFrameTime(), 1), wep._wallReach, reach) or reach
+                wep._wallReach = wep._wallReach and SandSwep.Math.Damp(wep._wallReach, reach, 5, RealFrameTime()) or reach
             end
         end
 

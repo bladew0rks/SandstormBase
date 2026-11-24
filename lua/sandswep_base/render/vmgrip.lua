@@ -206,7 +206,7 @@ local function Prepare(vm, data)
 
     local curves, fingers = {}, {}
     for i = 0, vm:GetSequenceCount() - 1 do
-        local name = string.lower(vm:GetSequenceName(i) or "")
+        local name = SandSwep.SequenceName(vm, i)
         if data.curves[name] then curves[i] = data.curves[name] end
         if data.fingers and data.fingers[name] then fingers[i] = data.fingers[name] end
     end
@@ -538,7 +538,7 @@ local function IdleBaseContext(vm, rig, data, pose, deltas, seq)
 
     local idleBase = rig.idleBase[seq]
     if idleBase == nil then
-        idleBase = data.idlebase[string.lower(vm:GetSequenceName(seq) or "")] or false
+        idleBase = data.idlebase[SandSwep.SequenceName(vm, seq)] or false
         rig.idleBase[seq] = idleBase
     end
 
@@ -554,7 +554,7 @@ local function ReloadRelease(vm, rig, seq, cycle, release)
 
     local isReload = rig.isReload[seq]
     if isReload == nil then
-        isReload = string.find(string.lower(vm:GetSequenceName(seq) or ""), "reload", 1, true) ~= nil
+        isReload = string.find(SandSwep.SequenceName(vm, seq), "reload", 1, true) ~= nil
         rig.isReload[seq] = isReload
     end
     if not isReload then return 0 end

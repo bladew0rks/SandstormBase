@@ -660,7 +660,7 @@ local function computePose(wep, ply, tpik, state)
     local lowered = wep.IsSafe and wep:IsSafe() and not reloading
     local fadeTime = lowered and (wep.SafeLowerTime or 0.35) or (wep.SafeRaiseTime or 0.3)
     local target = lowered and 1 or 0
-    state.safe = math.Approach(state.safe or target, target, VisualFrameTime() / mathMax(fadeTime, 0.01))
+    state.safe = SandSwep.Math.Lerp(state.safe or target, target, fadeTime)
 
     local sprintVis = mathClamp(wep.GetSprintProgress and wep:GetSprintProgress() or 0, 0, 1)
     local sprintPoseT = usesSprintAnims(wep, tpik, state) and 0 or smooth(sprintVis)

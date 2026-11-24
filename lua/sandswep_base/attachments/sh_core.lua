@@ -21,6 +21,24 @@ function SandSwep.BoneId(ent, name)
     return id or nil
 end
 
+function SandSwep.SequenceName(ent, seq)
+    local model = ent:GetModel()
+    local cache = ent.SandSwepSeqNames
+    if not cache or cache.model ~= model then
+        cache = { model = model }
+        ent.SandSwepSeqNames = cache
+    end
+
+    seq = seq or ent:GetSequence()
+    local name = cache[seq]
+    if not name then
+        name = string.lower(ent:GetSequenceName(seq) or "")
+        cache[seq] = name
+    end
+
+    return name
+end
+
 local traceIn = {}
 function SandSwep.TraceLine(start, endpos, filter, mask, out)
     traceIn.start = start

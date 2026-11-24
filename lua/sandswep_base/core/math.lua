@@ -2,7 +2,7 @@ SandSwep = SandSwep or {}
 SandSwep.Math = SandSwep.Math or {}
 
 local MATH = SandSwep.Math
-local sqrt, abs = math.sqrt, math.abs
+local sqrt, abs, exp, min, max = math.sqrt, math.abs, math.exp, math.min, math.max
 
 local function Clamp01(x)
     return x < 0 and 0 or (x > 1 and 1 or x)
@@ -16,6 +16,21 @@ MATH.Smoothstep = Smoothstep
 
 function MATH.Smoothstep01(t)
     return Smoothstep(Clamp01(t))
+end
+
+function MATH.Lerp(cur, target, time, dt)
+    local step = (dt or SandSwep.VisualFrameTime()) / max(time, 0.01)
+    if cur < target then return min(cur + step, target) end
+    return max(cur - step, target)
+end
+
+local function DampFactor(speed, dt)
+    return 1 - exp(-speed * (dt or SandSwep.VisualFrameTime()))
+end
+MATH.DampFactor = DampFactor
+
+function MATH.Damp(cur, target, speed, dt)
+    return cur + (target - cur) * DampFactor(speed, dt)
 end
 
 local function Unit(x, y, z)

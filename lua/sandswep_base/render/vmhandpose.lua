@@ -123,7 +123,7 @@ function SWEP:VMHandPose(vm)
     local wrist = handM:GetTranslation()
     local gripOffset = WorldToLocal(wrist, angle_zero, fgM:GetTranslation(), wpnM:GetAngles())
 
-    local seqName = string.lower(vm:GetSequenceName(vm:GetSequence()) or "")
+    local seqName = SandSwep.SequenceName(vm)
     if string.find(seqName, "idle", 1, true) then bones.hold[key] = gripOffset end
 
     local marks = pose.LeftHandMarkers and pose.LeftHandMarkers[seqName]

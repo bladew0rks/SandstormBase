@@ -231,7 +231,7 @@ function SWEP:ApplyVMPoseParams(vm)
 end
 
 local function GripTarget(vm, rate)
-    local data = SandSwep.GetSequenceData(vm:GetModel(), vm:GetSequenceName(vm:GetSequence()))
+    local data = SandSwep.GetSequenceData(vm:GetModel(), SandSwep.SequenceName(vm))
     local marks = data and data.marks
     if not marks or data.len <= 0 then return 1 end
 
@@ -244,7 +244,7 @@ local function GripTarget(vm, rate)
 end
 
 local function GripCurve(vm, time)
-    local data = SandSwep.GetSequenceData(vm:GetModel(), vm:GetSequenceName(vm:GetSequence()))
+    local data = SandSwep.GetSequenceData(vm:GetModel(), SandSwep.SequenceName(vm))
     local marks = data and data.marks
     if not marks or data.len <= 0 then return 1 end
 
@@ -270,7 +270,7 @@ function SWEP:ApplyGripWeight(vm)
     elseif self._seqStep then
         grip.w = GripCurve(vm, 1 / rate)
     elseif grip.frame ~= frame then
-        grip.w = math.Approach(grip.w, target, rate * VisualFrameTime())
+        grip.w = SandSwep.Math.Lerp(grip.w, target, GRIP_BLEND_TIME)
     end
     grip.frame = frame
 

@@ -45,7 +45,7 @@ local cvVMOffZ = CreateClientConVar("cl_sandswep_vm_offset_z", "0", true, false,
 local cvSprintCam = CreateClientConVar("cl_sandswep_sprintcam", "1", true, false, "Sprint sway", 0, 3)
 local cvCamAnim = CreateClientConVar("cl_sandswep_cameraanim", "1", true, false, "Animation camera", 0, 3)
 
-local Smoothstep = SandSwep.Math.Smoothstep
+local Smoothstep, Damp = SandSwep.Math.Smoothstep, SandSwep.Math.Damp
 
 local function ApplyPose(pos, ang, axes, offset, rot, t)
     local right, fwd, up = axes[1], axes[2], axes[3]
@@ -164,7 +164,7 @@ function SWEP:GetBlendedSight()
         self._sight = cur
     end
 
-    local blend = math.min(1, VisualFrameTime() / math.max(self.SightSwitchTime, 0.01) * SIGHT_SWITCH_EASE)
+    local blend = SandSwep.Math.DampFactor(SIGHT_SWITCH_EASE / math.max(self.SightSwitchTime, 0.01))
     local cp, ca = cur.Pos, cur.Ang
     if cp.x ~= targetPos.x or cp.y ~= targetPos.y or cp.z ~= targetPos.z then
         cp:SetUnpacked(
@@ -199,7 +199,7 @@ local function UpdateWalkState(wep, bob, ply, gait)
     local grounded = ply:OnGround() and ply:GetMoveType() == MOVETYPE_WALK
 
     local target = grounded and math.Clamp(speed / refSpeed, 0, WALK_BOB_MAX) or 0
-    bob.amt = Lerp(math.min(1, dt * WALK_BOB_EASE), bob.amt, target)
+    bob.amt = Damp(bob.amt, target, WALK_BOB_EASE, dt)
 
     bob.dbgDt, bob.dbgReal, bob.dbgSpeed, bob.dbgRate = dt, RealFrameTime(), speed, 0
 
@@ -276,7 +276,7 @@ function SWEP:GetSprintVisual()
     local want = self:GetSprinting() and not self:IsActionBusy()
     local target = want and 1 or 0
     local time = want and self.SprintInTime or self.SprintOutTime
-    self._sprintVis = math.Approach(self._sprintVis or target, target, VisualFrameTime() / math.max(time, 0.01))
+    self._sprintVis = SandSwep.Math.Lerp(self._sprintVis or target, target, time)
     return Smoothstep(self._sprintVis)
 end
 
@@ -477,7 +477,7 @@ local function UpdateSafeProgress(wep)
     local lowered = wep:IsSafe() and not wep:IsReloading() and not wep:IsMagChecking()
     local target = lowered and 1 or 0
     local time = lowered and wep.SafeLowerTime or wep.SafeRaiseTime
-    wep._safeProg = math.Approach(wep._safeProg or target, target, VisualFrameTime() / math.max(time, 0.01))
+    wep._safeProg = SandSwep.Math.Lerp(wep._safeProg or target, target, time)
 end
 
 local function CombinedMotion(wep, aimT, sprintVis, animSprint, dev)
@@ -622,9 +622,8 @@ local function VMKick(wep, aimT)
         local dt = math.min(RealFrameTime(), 0.1)
         local decay = math.exp(-(acc.Decay or 3) * dt)
         st.heat, st.drift = st.heat * decay, st.drift * decay
-        local follow = 1 - math.exp(-(acc.Follow or 14) * dt)
-        st.heatC = st.heatC + (st.heat - st.heatC) * follow
-        st.driftC = st.driftC + (st.drift - st.driftC) * follow
+        st.heatC = Damp(st.heatC, st.heat, acc.Follow or 14, dt)
+        st.driftC = Damp(st.driftC, st.drift, acc.Follow or 14, dt)
         if st.heat < 1e-3 and st.heatC < 1e-3 and math.abs(st.driftC) < 1e-3 then
             st.heat, st.heatC, st.drift, st.driftC = 0, 0, 0, 0
         end
@@ -954,7 +953,7 @@ function SWEP:GetSprintCamera()
     local frameNum = FrameNumber()
     if self._camFrame ~= frameNum then
         self._camFrame = frameNum
-        self._camW = math.Approach(self._camW or 0, target, VisualFrameTime() / SPRINT_CAM_FADE)
+        self._camW = SandSwep.Math.Lerp(self._camW or 0, target, SPRINT_CAM_FADE)
     end
 
     local scale = Smoothstep(self._camW) * self.SprintCameraScale * cvSprintCam:GetFloat()
@@ -1045,7 +1044,7 @@ hook.Add("PostDrawViewModel", "SandSwep_CameraBone", function(vm, ply, wep)
     wep._camBone = wep._camBone or {}
     local bone = wep._camBone
     bone[1], bone[2], bone[3], bone.frame = right, fwd, up, frame
-    bone.seq = Developer() and string.lower(vm:GetSequenceName(vm:GetSequence()) or "") or nil
+    bone.seq = Developer() and SandSwep.SequenceName(vm) or nil
 end)
 
 function SWEP:UpdateCameraAnim()

@@ -9,6 +9,9 @@ local entityGetBoneMatrix = ENTITY.GetBoneMatrix
 local entitySetBoneMatrix = ENTITY.SetBoneMatrix
 local copyBone = SandSwep.Math.CopyBone
 
+local MATH = SandSwep.Math
+local Unit, QuatMul, QuatRotate, QuatAxisAngle, QuatFromMatrix = MATH.Unit, MATH.QuatMul, MATH.QuatRotate, MATH.QuatAxisAngle, MATH.QuatFromMatrix
+
 local FrameNumber, RealTime, CurTime, IsValid = FrameNumber, RealTime, CurTime, IsValid
 local mathClamp, mathMax, mathAbs, mathSqrt = math.Clamp, math.max, math.abs, math.sqrt
 
@@ -796,18 +799,27 @@ local function alignHinge(ang, animAng, animUpperDir, animForeDir, upperDir, for
     ang:RotateAroundAxis(axis, roll * weight)
 end
 
-local function twistToward(side, ang, axisDir, targetUp)
-    local axis = axisDir:GetNormalized()
-    local current = ang:Up()
-    current:Sub(axis * current:Dot(axis))
+local function setRotation(mat, x, y, z, w)
+    local _, _, _, tx, _, _, _, ty, _, _, _, tz = mat:Unpack()
+    MATH.QuatToMatrix(mat, x, y, z, w, tx, ty, tz)
+end
 
-    local target = targetUp - axis * targetUp:Dot(axis)
-    if current:LengthSqr() < 1e-8 or target:LengthSqr() < 1e-8 then return end
+local function twistToward(side, x, y, z, w, axisDir, targetUp)
+    local ax, ay, az = Unit(axisDir.x, axisDir.y, axisDir.z)
+    local cx, cy, cz = QuatRotate(x, y, z, w, 0, 0, 1)
+    local tx, ty, tz = targetUp.x, targetUp.y, targetUp.z
 
-    current:Normalize()
-    target:Normalize()
+    local dot = cx * ax + cy * ay + cz * az
+    cx, cy, cz = cx - ax * dot, cy - ay * dot, cz - az * dot
+    dot = tx * ax + ty * ay + tz * az
+    tx, ty, tz = tx - ax * dot, ty - ay * dot, tz - az * dot
+    if cx * cx + cy * cy + cz * cz < 1e-8 or tx * tx + ty * ty + tz * tz < 1e-8 then return x, y, z, w end
 
-    local twist = math.deg(math.atan2(axis:Dot(current:Cross(target)), current:Dot(target)))
+    cx, cy, cz = Unit(cx, cy, cz)
+    tx, ty, tz = Unit(tx, ty, tz)
+
+    local cross = ax * (cy * tz - cz * ty) + ay * (cz * tx - cx * tz) + az * (cx * ty - cy * tx)
+    local twist = math.deg(math.atan2(cross, cx * tx + cy * ty + cz * tz))
     local frame = FrameNumber()
     local last = side.poleTwist
 
@@ -819,7 +831,8 @@ local function twistToward(side, ang, axisDir, targetUp)
     side.poleTwist, side.poleTwistFrame = twist, frame
     side.ulnaTwist = twist
 
-    ang:RotateAroundAxis(axis, twist * cvUlnaWeight:GetFloat())
+    local qx, qy, qz, qw = QuatAxisAngle(ax, ay, az, math.rad(twist * cvUlnaWeight:GetFloat()))
+    return QuatMul(qx, qy, qz, qw, x, y, z, w)
 end
 
 local dump
@@ -935,9 +948,8 @@ local function solveArmPole(ply, side, bones, outward, limbUpper, limbFore, scal
     local ulnaIdx = bones.Ulna and getBone(ply, bones.Ulna)
     local ulnaMat = ulnaIdx and copyBone(ply, ulnaIdx, armUlna)
     if ulnaMat then
-        local ulnaAng = ulnaMat:GetAngles()
-        twistToward(side, ulnaAng, foreDir, handMat:GetUp())
-        ulnaMat:SetAngles(ulnaAng)
+        local x, y, z, w = QuatFromMatrix(ulnaMat)
+        setRotation(ulnaMat, twistToward(side, x, y, z, w, foreDir, handMat:GetUp()))
         applyBoneMatrix(ply, ulnaIdx, ulnaMat, handIdx)
     end
 

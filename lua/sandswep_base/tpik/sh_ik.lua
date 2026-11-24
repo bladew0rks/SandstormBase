@@ -4,12 +4,7 @@ local SOFT_STRETCH_START = 0.92
 local POLE_MIN_LENGTH = 0.25
 local BODY_MIN_WEIGHT = 0.05
 
-local function normalize(x, y, z)
-    local len = math.sqrt(x * x + y * y + z * z)
-    if len < 1e-6 then return 0, 0, 0, 0 end
-
-    return x / len, y / len, z / len, len
-end
+local normalize = SandSwep.Math.Unit
 
 local function perpendicular(px, py, pz, dx, dy, dz)
     local dot = px * dx + py * dy + pz * dz

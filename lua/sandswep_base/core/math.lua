@@ -283,12 +283,7 @@ local function QuatAngle(ax, ay, az, aw, bx, by, bz, bw)
 end
 MATH.QuatAngle = QuatAngle
 
-local function QuatFromRotation(m00, m01, m02, m10, m11, m12, m20, m21, m22)
-    local fx, fy, fz = Unit(m00, m10, m20)
-    local lx, ly, lz = Unit(m01, m11, m21)
-    local ux, uy, uz = Unit(m02, m12, m22)
-    m00, m10, m20, m01, m11, m21, m02, m12, m22 = fx, fy, fz, lx, ly, lz, ux, uy, uz
-
+local function QuatFromBasis(m00, m01, m02, m10, m11, m12, m20, m21, m22)
     local trace = m00 + m11 + m22
     if trace > 0 then
         local s = sqrt(trace + 1) * 2
@@ -307,6 +302,14 @@ local function QuatFromRotation(m00, m01, m02, m10, m11, m12, m20, m21, m22)
     local s = sqrt(1 + m22 - m00 - m11) * 2
     local inv = 1 / s
     return (m02 + m20) * inv, (m12 + m21) * inv, 0.25 * s, (m10 - m01) * inv
+end
+
+local function QuatFromRotation(m00, m01, m02, m10, m11, m12, m20, m21, m22)
+    local fx, fy, fz = Unit(m00, m10, m20)
+    local lx, ly, lz = Unit(m01, m11, m21)
+    local ux, uy, uz = Unit(m02, m12, m22)
+
+    return QuatFromBasis(fx, lx, ux, fy, ly, uy, fz, lz, uz)
 end
 MATH.QuatFromRotation = QuatFromRotation
 
@@ -614,32 +617,42 @@ function MATH.CopyBone(ent, bone, out)
     return out
 end
 
+local function BasisQuat(m1, m2, m3, m5, m6, m7, m9, m10, m11, sx, sy, sz)
+    local ix, iy, iz = 1 / sx, 1 / sy, 1 / sz
+    local fx, fy, fz = m1 * ix, m5 * ix, m9 * ix
+    local lx, ly, lz = m2 * iy, m6 * iy, m10 * iy
+    local ux, uy, uz = m3 * iz, m7 * iz, m11 * iz
+
+    if fx * (ly * uz - lz * uy) + fy * (lz * ux - lx * uz) + fz * (lx * uy - ly * ux) < 0 then
+        lx, ly, lz = -lx, -ly, -lz
+    end
+
+    return QuatFromBasis(fx, lx, ux, fy, ly, uy, fz, lz, uz)
+end
+
 function MATH.BlendMatrix(from, to, w, out)
     local a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12 = from:Unpack()
     local b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12 = to:Unpack()
 
-    local fx, fy, fz, fLen = Unit(a1 + (b1 - a1) * w, a5 + (b5 - a5) * w, a9 + (b9 - a9) * w)
-    local ux, uy, uz = a3 + (b3 - a3) * w, a7 + (b7 - a7) * w, a11 + (b11 - a11) * w
-    local rx, ry, rz, rLen = Unit(fy * uz - fz * uy, fz * ux - fx * uz, fx * uy - fy * ux)
+    local asx, asy, asz = sqrt(a1 * a1 + a5 * a5 + a9 * a9), sqrt(a2 * a2 + a6 * a6 + a10 * a10), sqrt(a3 * a3 + a7 * a7 + a11 * a11)
+    local bsx, bsy, bsz = sqrt(b1 * b1 + b5 * b5 + b9 * b9), sqrt(b2 * b2 + b6 * b6 + b10 * b10), sqrt(b3 * b3 + b7 * b7 + b11 * b11)
+    local fromOk = asx > 1e-6 and asy > 1e-6 and asz > 1e-6
+    local toOk = bsx > 1e-6 and bsy > 1e-6 and bsz > 1e-6
 
-    if fLen == 0 or rLen == 0 then
+    if not toOk and not fromOk then
         if out ~= to then out:Set(to) end
         return out
     end
 
-    ux, uy, uz = ry * fz - rz * fy, rz * fx - rx * fz, rx * fy - ry * fx
+    local ax, ay, az, aw, bx, by, bz, bw
+    if fromOk then ax, ay, az, aw = BasisQuat(a1, a2, a3, a5, a6, a7, a9, a10, a11, asx, asy, asz) end
+    if toOk then bx, by, bz, bw = BasisQuat(b1, b2, b3, b5, b6, b7, b9, b10, b11, bsx, bsy, bsz) end
+    if not fromOk then ax, ay, az, aw = bx, by, bz, bw end
+    if not toOk then bx, by, bz, bw = ax, ay, az, aw end
 
-    local sx = sqrt(a1 * a1 + a5 * a5 + a9 * a9)
-    local sy = sqrt(a2 * a2 + a6 * a6 + a10 * a10)
-    local sz = sqrt(a3 * a3 + a7 * a7 + a11 * a11)
-    sx = sx + (sqrt(b1 * b1 + b5 * b5 + b9 * b9) - sx) * w
-    sy = sy + (sqrt(b2 * b2 + b6 * b6 + b10 * b10) - sy) * w
-    sz = sz + (sqrt(b3 * b3 + b7 * b7 + b11 * b11) - sz) * w
+    local x, y, z, qw = QuatSlerp(ax, ay, az, aw, bx, by, bz, bw, w)
 
-    out:SetUnpacked(
-        fx * sx, -rx * sy, ux * sz, a4 + (b4 - a4) * w,
-        fy * sx, -ry * sy, uy * sz, a8 + (b8 - a8) * w,
-        fz * sx, -rz * sy, uz * sz, a12 + (b12 - a12) * w,
-        0, 0, 0, 1)
-    return out
+    return MATH.QuatToMatrix(out, x, y, z, qw,
+        a4 + (b4 - a4) * w, a8 + (b8 - a8) * w, a12 + (b12 - a12) * w,
+        asx + (bsx - asx) * w, asy + (bsy - asy) * w, asz + (bsz - asz) * w)
 end

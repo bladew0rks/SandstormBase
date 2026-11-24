@@ -128,7 +128,7 @@ function SWEP:UpdateIdleFidget(owner, ct)
         or owner:KeyDown(IN_USE) or self:GetAiming() or self:GetAimProgress() > 0 or self:GetSprinting()
         or self:IsReloading() or self:ActionBlocks("fidget") or self:IsActionBusy() or self:GetGLMode()
         or self:IsGLReloading() or ct < self:GetNextPrimaryFire()
-        or self:GetBurstLeft() > 0
+        or self:GetBurstLeft() > 0 or self:GetBipodDeployed() or self:IsBipodBusy()
     local fidgeting = self:IsFidgeting()
 
     if active then

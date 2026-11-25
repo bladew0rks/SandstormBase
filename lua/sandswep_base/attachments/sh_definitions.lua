@@ -709,6 +709,7 @@ SandSwep.RegisterAttachment("mag_m240_100", {
     Bodygroups = { Mag = 1, Mag_Attach = 1 },
     MagSize = 100,
     AnimSet = "m240box",
+    PoseParams = { beltbox = 1 },
     Stats = { AimTime = 1.08, AimMoveSpeed = 0.95 },
 })
 

@@ -40,6 +40,8 @@ FX.Weapons = {
     weapon_sand_galil_sar = { fp = GALIL, tp = RIFLE_TP, supp = LARGE },
     weapon_sand_l85a2 = { fp = { "ps_muzzleflash_l85_01", "ps_muzzleflash_l85_02" }, tp = RIFLE_TP, supp = LARGE },
     weapon_sand_m240 = { fp = { "ps_muzzleflash_m240_01" }, tp = RIFLE_TP, supp = LARGE },
+    weapon_sand_hk21 = { fp = { "ps_muzzleflash_m240_01" }, tp = RIFLE_TP, supp = LARGE },
+    weapon_sand_m250 = { fp = { "ps_muzzleflash_m249_01", "ps_muzzleflash_m249_02" }, tp = RIFLE_TP, supp = LARGE },
     weapon_sand_mg3 = { fp = { "ps_muzzleflash_mg3_01", "ps_muzzleflash_mg3_02" }, tp = RIFLE_TP, supp = LARGE },
     weapon_sand_pkm = { fp = { "ps_muzzleflash_pkm_01" }, tp = RIFLE_TP, supp = LARGE },
     weapon_sand_m249 = { fp = { "ps_muzzleflash_m249_01", "ps_muzzleflash_m249_02" }, tp = { "ps_muzzleflash_rifle_tp_01", "ps_muzzleflash_rifle_xshape_tp_01", "ps_muzzleflash_rifle_smoke_tp_01" }, supp = LARGE },

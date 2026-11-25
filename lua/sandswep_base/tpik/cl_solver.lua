@@ -7,7 +7,13 @@ local cv = SANDTPIK.CVars
 local ENTITY = FindMetaTable("Entity")
 local entityGetBoneMatrix = ENTITY.GetBoneMatrix
 local entitySetBoneMatrix = ENTITY.SetBoneMatrix
-local copyBone = SandSwep.Math.CopyBone
+local function copyBone(ent, bone, out)
+    local mat = entityGetBoneMatrix(ent, bone)
+    if not mat then return end
+
+    out:Set(mat)
+    return out
+end
 
 local MATH = SandSwep.Math
 local Unit, QuatMul, QuatRotate, QuatAxisAngle, QuatFromMatrix = MATH.Unit, MATH.QuatMul, MATH.QuatRotate, MATH.QuatAxisAngle, MATH.QuatFromMatrix

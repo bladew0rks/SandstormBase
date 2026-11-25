@@ -74,8 +74,10 @@ end
 
 function SandSwep.PoseMagRounds(ent, data, spent)
     local magId = SandSwep.BoneId(ent, "b_wpn_mag")
-    local mag = magId and SandSwep.Math.CopyBone(ent, magId, magTmp)
-    if not mag then return end
+    local magMat = magId and ent:GetBoneMatrix(magId)
+    if not magMat then return end
+    local mag = magTmp
+    mag:Set(magMat)
 
     local ids = ent.SandSwepRoundIds
     if not ids or ids.data ~= data or ids.model ~= ent:GetModel() then

@@ -599,17 +599,9 @@ function Quaternion.__tostring(self)
     return string.format("Quaternion(%g, %g, %g, %g)", self.X, self.Y, self.Z, self.W)
 end
 
-local ENTITY = FindMetaTable("Entity")
-local copyBoneMatrix, getBoneMatrix = ENTITY.CopyBoneMatrix, ENTITY.GetBoneMatrix
+local getBoneMatrix = FindMetaTable("Entity").GetBoneMatrix
 
 function MATH.CopyBone(ent, bone, out)
-    if bone < 0 or bone >= ent:GetBoneCount() then return end
-
-    if copyBoneMatrix then
-        copyBoneMatrix(ent, bone, out)
-        return out
-    end
-
     local mat = getBoneMatrix(ent, bone)
     if not mat then return end
 

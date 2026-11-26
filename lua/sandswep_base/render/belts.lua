@@ -366,51 +366,65 @@ end
 
 local collideOut = {}
 local collideIn = { output = collideOut, mask = MASK_SOLID }
+local collideStart, collideEnd, collideHit = Vector(), Vector(), Vector()
 
 local function CollideAttached(sim, cfg, info, ply)
     if cfg.Collide == false then return end
 
     local nodes = sim.nodes
     local radius = (cfg.Radius or 0.8) * CM * (info.k or 1)
-    collideIn.filter = ply
+    collideIn.filter, collideIn.start, collideIn.endpos = ply, collideStart, collideEnd
 
     for i = 2, #nodes do
         local node = nodes[i]
         if not node.c then continue end
 
-        collideIn.start, collideIn.endpos = view.ToWorld(node.c, info), view.ToWorld(node.p, info)
+        view.ToWorld(node.c, info, collideStart)
+        view.ToWorld(node.p, info, collideEnd)
         util.TraceLine(collideIn)
 
         if collideOut.Hit and not collideOut.StartSolid then
-            local hit = collideOut.HitPos + collideOut.HitNormal * radius
-            local vel = node.p - node.o
-            node.p = view.ToVM(hit, info)
+            local hp, normal = collideOut.HitPos, collideOut.HitNormal
+            collideHit:SetUnpacked(hp.x + normal.x * radius, hp.y + normal.y * radius, hp.z + normal.z * radius)
+            local p, o = node.p, node.o
+            local vx, vy, vz = p.x - o.x, p.y - o.y, p.z - o.z
+            view.ToVM(collideHit, info, p)
 
-            local normal = collideOut.HitNormal
-            node.o = node.p - (vel - normal * vel:Dot(normal)) * 0.3
+            local dot = vx * normal.x + vy * normal.y + vz * normal.z
+            o:SetUnpacked(p.x - (vx - normal.x * dot) * 0.3, p.y - (vy - normal.y * dot) * 0.3, p.z - (vz - normal.z * dot) * 0.3)
         end
     end
 end
+
+local eyeCur, eyeInv, carryMat = Matrix(), Matrix(), Matrix()
 
 local function FollowEye(sim, info)
     if not info or not info.origin or not info.ang then return end
 
     local eye = sim.eye or Matrix()
     sim.eye = eye
-    local cur = Matrix()
-    cur:SetTranslation(info.origin)
-    cur:SetAngles(info.ang)
+    eyeCur:Identity()
+    eyeCur:SetTranslation(info.origin)
+    eyeCur:SetAngles(info.ang)
 
     if sim.hasEye then
-        local carry = cur * eye:GetInverseTR()
-        for _, node in ipairs(sim.nodes) do
-            node.p = carry * node.p
-            node.o = carry * node.o
+        eyeInv:Set(eye)
+        eyeInv:InvertTR()
+        carryMat:Set(eyeCur)
+        carryMat:Mul(eyeInv)
+        for i = 1, #sim.nodes do
+            local node = sim.nodes[i]
+            node.p:Set(carryMat * node.p)
+            node.o:Set(carryMat * node.o)
         end
-        if sim.lastM then sim.lastM = carry * sim.lastM end
+        if sim.lastM then
+            eyeInv:Set(carryMat)
+            eyeInv:Mul(sim.lastM)
+            sim.lastM:Set(eyeInv)
+        end
     end
 
-    eye:Set(cur)
+    eye:Set(eyeCur)
     sim.hasEye = true
 end
 

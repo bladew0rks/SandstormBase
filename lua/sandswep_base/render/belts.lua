@@ -41,19 +41,25 @@ local function ClosestOnSegment(point, segStart, segEnd)
     return segStart + seg * math.Clamp((point - segStart):Dot(seg) / lenSqr, 0, 1)
 end
 
+local sqrt = math.sqrt
+
 local function RelaxPairs(nodes, gap, rest, compressOnly, pinFirst)
     for i = 1, #nodes - gap do
-        local nodeA, nodeB = nodes[i], nodes[i + gap]
-        local delta = nodeB.p - nodeA.p
-        local len = delta:Length()
+        local a, b = nodes[i].p, nodes[i + gap].p
+        local ax, ay, az = a.x, a.y, a.z
+        local bx, by, bz = b.x, b.y, b.z
+        local dx, dy, dz = bx - ax, by - ay, bz - az
+        local len = sqrt(dx * dx + dy * dy + dz * dz)
 
         if len > 1e-4 and (not compressOnly or len < rest) then
             local diff = (len - rest) / len
             if pinFirst and i == 1 then
-                nodeB.p = nodeB.p - delta * diff
+                b:SetUnpacked(bx - dx * diff, by - dy * diff, bz - dz * diff)
             else
-                nodeA.p = nodeA.p + delta * (diff * 0.5)
-                nodeB.p = nodeB.p - delta * (diff * 0.5)
+                local half = diff * 0.5
+                local ox, oy, oz = dx * half, dy * half, dz * half
+                a:SetUnpacked(ax + ox, ay + oy, az + oz)
+                b:SetUnpacked(bx - ox, by - oy, bz - oz)
             end
         end
     end

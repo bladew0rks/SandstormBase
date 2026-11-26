@@ -413,36 +413,37 @@ function SWEP:ShootBullet(damage, numBullets, aimcone, ammoType, force, tracer)
     self:ShootEffects()
 end
 
-local spreadRight, spreadUp = Vector(), Vector()
+local fireDirScratch = Vector()
+local ballisticOpts = {}
 
 function SWEP:FireBallistic(owner, bullet, ammo)
-    local dir = Vector(bullet.Dir)
+    fireDirScratch:Set(bullet.Dir)
+    local dir = fireDirScratch
     local spread = bullet.Spread or vector_origin
     local seed = self:GetShotCount()
 
     if spread.x > 0 or spread.y > 0 then
         local ang = dir:Angle()
-        spreadRight:Set(ang:Right())
-        spreadUp:Set(ang:Up())
+        local right, up = ang:Right(), ang:Up()
+        local x = (util.SharedRandom("SandSwepSpreadX1", -0.5, 0.5, seed) + util.SharedRandom("SandSwepSpreadX2", -0.5, 0.5, seed)) * spread.x
+        local y = (util.SharedRandom("SandSwepSpreadY1", -0.5, 0.5, seed) + util.SharedRandom("SandSwepSpreadY2", -0.5, 0.5, seed)) * spread.y
 
-        local x = util.SharedRandom("SandSwepSpreadX1", -0.5, 0.5, seed) + util.SharedRandom("SandSwepSpreadX2", -0.5, 0.5, seed)
-        local y = util.SharedRandom("SandSwepSpreadY1", -0.5, 0.5, seed) + util.SharedRandom("SandSwepSpreadY2", -0.5, 0.5, seed)
-
-        dir:Add(spreadRight * (x * spread.x))
-        dir:Add(spreadUp * (y * spread.y))
+        dir:SetUnpacked(
+            dir.x + right.x * x + up.x * y,
+            dir.y + right.y * x + up.y * y,
+            dir.z + right.z * x + up.z * y)
         dir:Normalize()
     end
 
     local every = self:GetTracerInterval(ammo)
+    ballisticOpts.Def = self:GetCalibre()
+    ballisticOpts.Speed = self:GetMuzzleVelocity() * UNITS_PER_METER
+    ballisticOpts.PenMult = (ammo and ammo.PenMult or 1) * (self.PenetrationMult or 1)
+    ballisticOpts.MinDamage = self.Primary.MinDamage
+    ballisticOpts.Seed = seed
+    ballisticOpts.Tracer = every > 0 and seed % every == 0
 
-    SandSwep.Ballistics.Fire(owner, self, bullet.Src, dir, bullet, {
-        Def = self:GetCalibre(),
-        Speed = self:GetMuzzleVelocity() * UNITS_PER_METER,
-        PenMult = (ammo and ammo.PenMult or 1) * (self.PenetrationMult or 1),
-        MinDamage = self.Primary.MinDamage,
-        Seed = seed,
-        Tracer = every > 0 and seed % every == 0,
-    })
+    SandSwep.Ballistics.Fire(owner, self, bullet.Src, dir, bullet, ballisticOpts)
 end
 
 function SWEP:ShootEffects()

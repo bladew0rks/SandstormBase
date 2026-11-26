@@ -119,17 +119,17 @@ function SWEP:UsesBallistics(numBullets)
     return not (ammo and ammo.Hitscan)
 end
 
+local breachTraceOut = {}
+local breachEndScratch = Vector()
+
 function SWEP:TryBreach(src, dir, force)
     if not SERVER or not SandSwep.BreachDoor or not SandSwep.ShotgunBreachEnabled() then return end
     if not force and self:GetPelletCount() <= 1 and not self.CanBreach then return end
 
     local owner = self:GetOwner()
-    local tr = util.TraceLine({
-        start = src,
-        endpos = src + dir * SandSwep.BreachShotgunRange,
-        filter = owner,
-        mask = MASK_SHOT,
-    })
+    local range = SandSwep.BreachShotgunRange
+    breachEndScratch:SetUnpacked(src.x + dir.x * range, src.y + dir.y * range, src.z + dir.z * range)
+    local tr = SandSwep.TraceLine(src, breachEndScratch, owner, MASK_SHOT, breachTraceOut)
 
     SandSwep.BreachDoor(tr.Entity, dir, 420, owner)
 end
@@ -363,21 +363,26 @@ if SERVER then
     end)
 end
 
+local bulletScratch = {}
+local spreadScratch = Vector()
+
 function SWEP:ShootBullet(damage, numBullets, aimcone, ammoType, force, tracer)
     local owner = self:GetOwner()
     local src, dir = self:GetBarrelShot()
     local ammo = self:GetAmmoDef()
 
-    local bullet = {
-        Num = numBullets,
-        Src = src,
-        Dir = dir,
-        Spread = Vector(aimcone, aimcone, 0),
-        Tracer = tracer or 5,
-        Force = force or 1,
-        Damage = damage * self:GetDamageMult() * self:GetStatMult("Damage"),
-        AmmoType = ammoType or self.Primary.Ammo,
-    }
+    spreadScratch:SetUnpacked(aimcone, aimcone, 0)
+    local bullet = bulletScratch
+    bullet.Num = numBullets
+    bullet.Src = src
+    bullet.Dir = dir
+    bullet.Spread = spreadScratch
+    bullet.Tracer = tracer or 5
+    bullet.TracerName = nil
+    bullet.Force = force or 1
+    bullet.Damage = damage * self:GetDamageMult() * self:GetStatMult("Damage")
+    bullet.AmmoType = ammoType or self.Primary.Ammo
+    bullet.Callback = nil
 
     if ammo then
         if ammo.TracerName then bullet.TracerName = ammo.TracerName end

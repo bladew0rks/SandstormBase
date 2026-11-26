@@ -52,11 +52,14 @@ local function AimTrace(ply)
 end
 
 local LASER_COLOR = Color(255, 30, 20)
+local dotPosScratch = Vector()
 
 hook.Add("PostDrawTranslucentRenderables", "SandSwep_Lasers", function(depth, sky)
-    if depth or sky then return end
+    if depth or sky or not SandSwep.Holders then return end
 
-    for _, ply in player.Iterator() do
+    local holders = SandSwep.Holders()
+    for i = 1, #holders do
+        local ply = holders[i]
         local wep, def = TacticalState(ply, "Laser")
         if not wep then continue end
 
@@ -66,10 +69,11 @@ hook.Add("PostDrawTranslucentRenderables", "SandSwep_Lasers", function(depth, sk
         local col = def.LaserColor or LASER_COLOR
         render.SetMaterial(matDot)
 
-        local pos = tr.HitPos + tr.HitNormal * 0.5
+        local hp, hn = tr.HitPos, tr.HitNormal
+        dotPosScratch:SetUnpacked(hp.x + hn.x * 0.5, hp.y + hn.y * 0.5, hp.z + hn.z * 0.5)
         local size = 3 + math.Rand(0, 0.6)
-        render.DrawSprite(pos, size, size, col)
-        render.DrawSprite(pos, size * 0.4, size * 0.4, color_white)
+        render.DrawSprite(dotPosScratch, size, size, col)
+        render.DrawSprite(dotPosScratch, size * 0.4, size * 0.4, color_white)
     end
 end)
 

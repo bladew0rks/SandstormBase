@@ -179,7 +179,7 @@ function SWEP:EjectLiveRoundClient()
 end
 
 local lastFrame
-local scaleMatrix, scaleVec = Matrix(), Vector()
+local scaleMatrix, scaleVec, vmPosScratch = Matrix(), Vector(), Vector()
 hook.Add("PostDrawViewModel", "SandSwep_Shells", function(vm, ply, wep)
     if ply ~= LocalPlayer() or not IsValid(vm) or vm ~= ply:GetViewModel(0) then return end
 
@@ -199,7 +199,8 @@ hook.Add("PostDrawViewModel", "SandSwep_Shells", function(vm, ply, wep)
 
     if #shells > 0 then
         local ct = CurTime()
-        for _, shell in ipairs(shells) do
+        for i = 1, #shells do
+            local shell = shells[i]
             local ent = shell.ent
             if not shell.vmStage or not IsValid(ent) then continue end
 
@@ -218,7 +219,7 @@ hook.Add("PostDrawViewModel", "SandSwep_Shells", function(vm, ply, wep)
             scaleMatrix:Scale(scaleVec)
             ent:EnableMatrix("RenderMultiply", scaleMatrix)
 
-            ent:SetPos(view.ToVM(worldPos, info))
+            ent:SetPos(view.ToVM(worldPos, info, vmPosScratch))
             ent:SetupBones()
             ent:DrawModel()
             ent:SetPos(worldPos)
@@ -295,7 +296,7 @@ local function StepShell(shell, ply)
 
     if normal.z > 0.7 and vel:Length() < 25 then
         shell.rest = true
-        shell.ang = Angle(0, shell.ang.y, shell.restRoll)
+        shell.ang:SetUnpacked(0, shell.ang.y, shell.restRoll)
     end
 end
 

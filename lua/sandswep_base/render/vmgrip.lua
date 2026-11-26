@@ -62,8 +62,10 @@ local function DeltaRot(delta, weight)
 end
 
 local function SolveTwoBone(rx, ry, rz, jx, jy, jz, tx, ty, tz, gx, gy, gz, ex, ey, ez, startRatio, maxScale)
-    local upper = sqrt((jx - rx) ^ 2 + (jy - ry) ^ 2 + (jz - rz) ^ 2)
-    local lower = sqrt((tx - jx) ^ 2 + (ty - jy) ^ 2 + (tz - jz) ^ 2)
+    local ux, uy, uz = jx - rx, jy - ry, jz - rz
+    local lx, ly, lz = tx - jx, ty - jy, tz - jz
+    local upper = sqrt(ux * ux + uy * uy + uz * uz)
+    local lower = sqrt(lx * lx + ly * ly + lz * lz)
     local maxLen = upper + lower
 
     local dx, dy, dz = ex - rx, ey - ry, ez - rz
@@ -243,7 +245,8 @@ local function ApplyDelta(mat, delta, amount)
 end
 
 local function ApplyDeltas(locals, deltas, alpha, fingerAlpha, thumbAlpha)
-    for _, delta in ipairs(deltas) do
+    for k = 1, #deltas do
+        local delta = deltas[k]
         local amount = (delta[10] and thumbAlpha) or (delta[9] and fingerAlpha) or alpha
         if amount > 0 then ApplyDelta(locals[delta[1]], delta, amount) end
     end
@@ -531,7 +534,19 @@ local function GetRigCache(vm, model, data)
 end
 
 local function IdleBaseContext(vm, rig, data, pose, deltas, seq)
-    local alt = data.idlebase and rig.deltas[pose .. "@idle"]
+    if not data.idlebase then return nil, deltas end
+
+    local idleNames = rig.idleNames
+    if not idleNames then
+        idleNames = {}
+        rig.idleNames = idleNames
+    end
+    local altKey = idleNames[pose]
+    if not altKey then
+        altKey = pose .. "@idle"
+        idleNames[pose] = altKey
+    end
+    local alt = rig.deltas[altKey]
     if not alt then return nil, deltas end
 
     rig.idleBase = rig.idleBase or {}
@@ -590,7 +605,12 @@ function SWEP:VMGrip(vm)
     vm.SandSwepGripAlpha = nil
 
     local model = vm:GetModel()
-    local data = model and SandSwep.GripData[string.lower(model)]
+    if not model then return end
+    if vm.SandSwepGripMdl ~= model then
+        vm.SandSwepGripMdl = model
+        vm.SandSwepGripData = SandSwep.GripData[string.lower(model)] or false
+    end
+    local data = vm.SandSwepGripData
     if not data then return end
 
     local pose, gripId, gripDef = self:GetGripPose(data)
@@ -626,8 +646,11 @@ function SWEP:VMGrip(vm)
 
     if not Solve(vm, rig, deltas, alpha, fingerAlpha, thumbAlpha, unbase, aim, ctx) then return end
 
-    local out = rig.out
-    for _, i in ipairs(rig.list) do vm:SetBoneMatrix(i, out[i]) end
+    local out, list = rig.out, rig.list
+    for k = 1, #list do
+        local i = list[k]
+        vm:SetBoneMatrix(i, out[i])
+    end
 
     StoreFrameCache(vm, rig, frame, seq, cycle, pose, model)
 end

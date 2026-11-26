@@ -1,7 +1,9 @@
 if not CLIENT then return end
 
-local AXIS_X, AXIS_Y, AXIS_Z = Vector(1, 0, 0), Vector(0, 1, 0), Vector(0, 0, 1)
-local muzzleMat = Matrix()
+local Unit, CopyBone = SandSwep.Math.Unit, SandSwep.Math.CopyBone
+local gunMat, muzzleMat = Matrix(), Matrix()
+local gunF, gunR, gunU = Vector(), Vector(), Vector()
+local gunFrame = { m = gunMat, F = gunF, R = gunR, U = gunU }
 
 local renderView, renderFrame, renderWep
 local nonRenderView = {}
@@ -63,39 +65,36 @@ end
 
 local function GunFrame(vm, view)
     local bone = SandSwep.BoneId(vm, "b_wpn")
-    local boneMat = bone and vm:GetBoneMatrix(bone)
+    local boneMat = bone and CopyBone(vm, bone, gunMat)
     if not boneMat then return end
 
-    local origin = boneMat:GetTranslation()
-    local left = (boneMat * AXIS_X) - origin
-    left:Normalize()
-    local fwd = origin - (boneMat * AXIS_Y)
-    fwd:Normalize()
-    local up = (boneMat * AXIS_Z) - origin
-    up:Normalize()
+    local m11, m12, m13, ox, m21, m22, m23, oy, m31, m32, m33, oz = boneMat:Unpack()
+    local lx, ly, lz = Unit(m11, m21, m31)
+    local fx, fy, fz = Unit(-m12, -m22, -m32)
+    local ux, uy, uz = Unit(m13, m23, m33)
 
     local muzzleBone = SandSwep.BoneId(vm, "b_wpn_muzzle")
-    local muzzle = muzzleBone and SandSwep.Math.CopyBone(vm, muzzleBone, muzzleMat)
+    local muzzle = muzzleBone and CopyBone(vm, muzzleBone, muzzleMat)
     if muzzle then
-        local toMuzzle = muzzle:GetTranslation() - origin
-        if toMuzzle:LengthSqr() > 1 then
-            toMuzzle:Normalize()
-            if toMuzzle:Dot(fwd) < 0.5 then
-                fwd = toMuzzle
+        local mx = muzzle:GetField(1, 4) - ox
+        local my = muzzle:GetField(2, 4) - oy
+        local mz = muzzle:GetField(3, 4) - oz
+        if mx * mx + my * my + mz * mz > 1 then
+            mx, my, mz = Unit(mx, my, mz)
+            if mx * fx + my * fy + mz * fz < 0.5 then
+                fx, fy, fz = mx, my, mz
                 local viewUp = view.ang:Up()
-                up = viewUp - fwd * fwd:Dot(viewUp)
-                up:Normalize()
-                left = -fwd:Cross(up)
+                local dot = fx * viewUp.x + fy * viewUp.y + fz * viewUp.z
+                ux, uy, uz = Unit(viewUp.x - fx * dot, viewUp.y - fy * dot, viewUp.z - fz * dot)
+                lx, ly, lz = -(fy * uz - fz * uy), -(fz * ux - fx * uz), -(fx * uy - fy * ux)
             end
         end
     end
 
-    return {
-        m = boneMat,
-        F = fwd,
-        R = -left,
-        U = up,
-    }
+    gunF:SetUnpacked(fx, fy, fz)
+    gunR:SetUnpacked(-lx, -ly, -lz)
+    gunU:SetUnpacked(ux, uy, uz)
+    return gunFrame
 end
 
 SandSwep.VMView = {

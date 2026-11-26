@@ -257,7 +257,7 @@ local function GripCurve(vm, time)
 end
 
 function SWEP:ApplyGripWeight(vm)
-    if vm:LookupPoseParameter("gripweight") < 0 then return end
+    if not SandSwep.PoseParamId(vm, "gripweight") then return end
 
     local rate = 1 / GRIP_BLEND_TIME
     local target = GripTarget(vm, rate)
@@ -321,6 +321,7 @@ local function ResetForeignViewmodel(vm)
         vm.SandSwepPoses = nil
         vm.SandSwepGrip = nil
     end
+    vm.SandSwepFireModeVal = nil
 end
 
 hook.Add("PreDrawViewModel", "SandSwep_ResetBodygroups", function(vm, ply, wep)

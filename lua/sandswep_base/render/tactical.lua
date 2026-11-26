@@ -4,7 +4,10 @@ local matBeam = Material("effects/laser1")
 local matGlow = Material("sprites/light_glow02_add")
 local beamCol = Color(255, 30, 20, 90)
 local LASER_DEFAULT = Color(255, 30, 20)
+local AXIS_X = Vector(1, 0, 0)
 local beamBoneMat = Matrix()
+local laserTraceOut = {}
+local laserEndScratch, beamEndScratch = Vector(), Vector()
 
 local function DeviceEntity(wep, def, slotName)
     local found
@@ -25,7 +28,7 @@ local function DeviceVMRay(wep, def, slotName)
     local entAng = ent:GetAngles()
     local origin = ent:GetPos()
     if def.BeamBone then
-        local bone = ent:LookupBone(def.BeamBone)
+        local bone = SandSwep.BoneId(ent, def.BeamBone)
         local matrix = bone and SandSwep.Math.CopyBone(ent, bone, beamBoneMat)
         if matrix then origin, entAng = matrix:GetTranslation(), matrix:GetAngles() end
     end
@@ -35,8 +38,8 @@ local function DeviceVMRay(wep, def, slotName)
     if def.BeamLocal then
         start = LocalToWorld(def.BeamLocal, angle_zero, origin, entAng)
     else
-        local attId = def.Beam and ent:LookupAttachment(def.Beam)
-        att = attId and attId > 0 and ent:GetAttachment(attId)
+        local attId = def.Beam and SandSwep.AttachmentId(ent, def.Beam)
+        att = attId and ent:GetAttachment(attId)
         if att then start = att.Pos end
     end
 
@@ -46,7 +49,7 @@ local function DeviceVMRay(wep, def, slotName)
         return start, dir
     end
 
-    local localDir = def.BeamDir or (def.Rail and def.Rail.Front) or Vector(1, 0, 0)
+    local localDir = def.BeamDir or (def.Rail and def.Rail.Front) or AXIS_X
     local dir = LocalToWorld(localDir, angle_zero, vector_origin, entAng)
     dir:Normalize()
 
@@ -77,9 +80,11 @@ function SWEP:UpdateTacticalBeam()
     local owner = self:GetOwner()
     local beam = SandSwep.TacBeam[owner] or {}
     beam.time = RealTime()
+    beam.eye, beam.eyeAng, beam.scale = eye, eyeAng, scale
 
     local laserStart, laserDir, laserDef
-    for _, feature in ipairs(FEATURES) do
+    for i = 1, #FEATURES do
+        local feature = FEATURES[i]
         local def, slotName = self:GetFeatureDef(feature)
         local start, dir
         if def then start, dir = DeviceVMRay(self, def, slotName) end
@@ -111,20 +116,24 @@ function SWEP:DrawVMLaser(start, dir, def)
     local beams = SandSwep.TacBeam and SandSwep.TacBeam[owner]
     local ray = beams and beams.Laser
     if ray then
-        local tr = util.TraceLine({ start = ray.pos, endpos = ray.pos + ray.dir * 4096, filter = owner, mask = MASK_SHOT })
+        local rp, rd = ray.pos, ray.dir
+        laserEndScratch:SetUnpacked(rp.x + rd.x * 4096, rp.y + rd.y * 4096, rp.z + rd.z * 4096)
+        local tr = SandSwep.TraceLine(rp, laserEndScratch, owner, MASK_SHOT, laserTraceOut)
         if tr.Hit then
-            local eye, eyeAng = EyePos(), EyeAngles()
-            local scale = math.tan(math.rad(LocalPlayer():GetFOV()) * 0.5) / math.tan(math.rad(self.ViewModelFOV or 62) * 0.5)
+            local eye, eyeAng = beams.eye or EyePos(), beams.eyeAng or EyeAngles()
+            local scale = beams.scale or (math.tan(math.rad(LocalPlayer():GetFOV()) * 0.5) / math.tan(math.rad(self.ViewModelFOV or 62) * 0.5))
             local hit = WorldToLocal(tr.HitPos, angle_zero, eye, eyeAng)
             hit.y, hit.z = hit.y / scale, hit.z / scale
-            len = math.Clamp((LocalToWorld(hit, angle_zero, eye, eyeAng) - start):Dot(dir), 0, 120)
+            local hitPos = LocalToWorld(hit, angle_zero, eye, eyeAng)
+            len = math.Clamp((hitPos.x - start.x) * dir.x + (hitPos.y - start.y) * dir.y + (hitPos.z - start.z) * dir.z, 0, 120)
         end
     end
 
     local col = def.LaserColor or LASER_DEFAULT
     render.SetMaterial(matBeam)
     beamCol.r, beamCol.g, beamCol.b = col.r, col.g, col.b
-    render.DrawBeam(start, start + dir * len, 0.15, 0, 1, beamCol)
+    beamEndScratch:SetUnpacked(start.x + dir.x * len, start.y + dir.y * len, start.z + dir.z * len)
+    render.DrawBeam(start, beamEndScratch, 0.15, 0, 1, beamCol)
 
     render.SetMaterial(matGlow)
     render.DrawSprite(start, 0.6, 0.6, col)

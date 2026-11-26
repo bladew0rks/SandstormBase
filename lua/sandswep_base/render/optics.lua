@@ -232,8 +232,8 @@ function SWEP:GetLensData(sight)
     end
     if not IsValid(ent) then return end
 
-    local attId = ent:LookupAttachment(sight.Lens.Attachment or "lens")
-    if not attId or attId <= 0 then return end
+    local attId = SandSwep.AttachmentId(ent, sight.Lens.Attachment or "lens")
+    if not attId then return end
 
     local att = ent:GetAttachment(attId)
     if not att then return end

@@ -21,6 +21,54 @@ function SandSwep.BoneId(ent, name)
     return id or nil
 end
 
+local attIds = {}
+function SandSwep.AttachmentId(ent, name)
+    local model = ent:GetModel()
+    if not model then
+        local id = ent:LookupAttachment(name)
+        return id and id > 0 and id or nil
+    end
+
+    local ids = attIds[model]
+    if not ids then
+        ids = {}
+        attIds[model] = ids
+    end
+
+    local id = ids[name]
+    if id == nil then
+        local found = ent:LookupAttachment(name)
+        id = (found and found > 0) and found or false
+        ids[name] = id
+    end
+
+    return id or nil
+end
+
+local poseIds = {}
+function SandSwep.PoseParamId(ent, name)
+    local model = ent:GetModel()
+    if not model then
+        local id = ent:LookupPoseParameter(name)
+        return id and id >= 0 and id or nil
+    end
+
+    local ids = poseIds[model]
+    if not ids then
+        ids = {}
+        poseIds[model] = ids
+    end
+
+    local id = ids[name]
+    if id == nil then
+        local found = ent:LookupPoseParameter(name)
+        id = (found and found >= 0) and found or false
+        ids[name] = id
+    end
+
+    return id or nil
+end
+
 function SandSwep.SequenceName(ent, seq)
     local model = ent:GetModel()
     local cache = ent.SandSwepSeqNames
@@ -68,8 +116,8 @@ if CLIENT then
 
     function SandSwep.OffsetFrame(ent, offset)
         if offset.Attachment then
-            local id = ent:LookupAttachment(offset.Attachment)
-            local att = id and id > 0 and ent:GetAttachment(id)
+            local id = SandSwep.AttachmentId(ent, offset.Attachment)
+            local att = id and ent:GetAttachment(id)
             if att then return att.Pos, att.Ang end
         end
 

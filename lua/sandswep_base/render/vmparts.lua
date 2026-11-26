@@ -164,6 +164,8 @@ function SWEP:VMForearmFit(vm)
     FitSide(vm, ids.R_fore, ids.R_hand, rest.R, weights and weights.R or 1)
 end
 
+local handScaleVec = Vector(1, 1, 1)
+
 function SWEP:ApplyHandScale(vm)
     if self.NoHandScale then
         ClearHandScale(vm)
@@ -185,11 +187,11 @@ function SWEP:ApplyHandScale(vm)
     local ids = {}
     for side, list in pairs(HAND_BONES) do
         local s = 1 + (scale - 1) * (side == "L" and left or right)
-        local uniform = Vector(s, s, s)
-        for _, name in ipairs(list) do
-            local id = vm:LookupBone(name)
+        handScaleVec:SetUnpacked(s, s, s)
+        for i = 1, #list do
+            local id = SandSwep.BoneId(vm, list[i])
             if id then
-                vm:ManipulateBoneScale(id, uniform)
+                vm:ManipulateBoneScale(id, handScaleVec)
                 ids[id] = true
             end
         end
@@ -235,8 +237,8 @@ function SWEP:ApplyParkedBones(vm)
     local cur = vm.SandSwepParked
     if not cur or cur.model ~= model or cur.cfg ~= cfg then
         ResetHidden(vm, cur)
-        cur = { model = model, cfg = cfg, ids = {}, hidden = {} }
-        for i, entry in ipairs(cfg) do cur.ids[i] = vm:LookupBone(entry.Bone) end
+        cur = { model = model, cfg = cfg, ids = {}, hidden = {}, seqHide = {}, windows = {} }
+        for i = 1, #cfg do cur.ids[i] = SandSwep.BoneId(vm, cfg[i].Bone) end
         vm.SandSwepParked = cur
     end
 
@@ -244,21 +246,27 @@ function SWEP:ApplyParkedBones(vm)
     if cur.seq ~= seq then
         cur.seq = seq
         cur.name = vm:GetSequenceName(seq) or ""
-        cur.windows = {}
 
-        for i, entry in ipairs(cfg) do
-            for pattern, window in pairs(entry.Window or {}) do
-                if string.find(cur.name, pattern) then cur.windows[i] = window end
+        local seqHide, windows = cur.seqHide, cur.windows
+        for i = 1, #cfg do
+            local entry = cfg[i]
+            seqHide[i] = (entry.Show and not SeqMatches(cur.name, entry.Show)) or SeqMatches(cur.name, entry.Hide)
+            windows[i] = nil
+            if entry.Window then
+                for pattern, window in pairs(entry.Window) do
+                    if string.find(cur.name, pattern) then windows[i] = window end
+                end
             end
         end
     end
 
     local cycle = vm:GetCycle()
-    for i, entry in ipairs(cfg) do
-        local id = cur.ids[i]
+    local ids, seqHide, windows = cur.ids, cur.seqHide, cur.windows
+    for i = 1, #cfg do
+        local id = ids[i]
         if id then
-            local hide = (entry.Show and not SeqMatches(cur.name, entry.Show)) or SeqMatches(cur.name, entry.Hide)
-            local window = cur.windows[i]
+            local hide = seqHide[i]
+            local window = windows[i]
             if window and (cycle < window[1] or cycle > window[2]) then hide = true end
             ScaleBone(vm, cur, id, hide)
         end
@@ -283,7 +291,7 @@ function SWEP:VMTubeSelector(vm)
 
     local second = self:GetTubeSwapped()
     local angle
-    if string.find(vm:GetSequenceName(vm:GetSequence()) or "", cfg.Seq) then
+    if string.find(SandSwep.SequenceName(vm), cfg.Seq) then
         if second then return end
         angle = -math.deg(math.atan2(selectorLocal:GetField(1, 3), selectorLocal:GetField(1, 1)))
     else
@@ -485,6 +493,22 @@ local function LinkCoverStep(wep, cfg, dt)
     return cover.a
 end
 
+local COVER_DEFAULT_ANG = Angle(-1, 0, 0)
+local shotAngScratch = Angle()
+
+local function SetScaledBoneAngles(vm, done, id, baseAng, scale)
+    local prev = done[id]
+    if prev == scale then return end
+    done[id] = scale
+
+    if scale == 0 then
+        vm:ManipulateBoneAngles(id, angle_zero)
+    else
+        shotAngScratch:SetUnpacked(baseAng.p * scale, baseAng.y * scale, baseAng.r * scale)
+        vm:ManipulateBoneAngles(id, shotAngScratch)
+    end
+end
+
 local function ResetShotBones(vm)
     for id in pairs(vm.SandSwepShotBones) do vm:ManipulateBoneAngles(id, angle_zero) end
     vm.SandSwepShotBones = nil
@@ -502,10 +526,13 @@ hook.Add("PreDrawViewModel", "SandSwep_ShotBones", function(vm, ply, wep)
     if cover then
         local id = SandSwep.BoneId(vm, cover.Bone)
         if id then
+            local done = vm.SandSwepShotBones
+            if not done then
+                done = {}
+                vm.SandSwepShotBones = done
+            end
             local coverAngle = LinkCoverStep(wep, cover, math.min(VisualFrameTime(), 0.1))
-            vm:ManipulateBoneAngles(id, (cover.Ang or Angle(-1, 0, 0)) * coverAngle)
-            vm.SandSwepShotBones = vm.SandSwepShotBones or {}
-            vm.SandSwepShotBones[id] = true
+            SetScaledBoneAngles(vm, done, id, cover.Ang or COVER_DEFAULT_ANG, coverAngle)
         end
     end
 
@@ -515,16 +542,21 @@ hook.Add("PreDrawViewModel", "SandSwep_ShotBones", function(vm, ply, wep)
         return
     end
 
-    local done = vm.SandSwepShotBones or {}
-    vm.SandSwepShotBones = done
+    local done = vm.SandSwepShotBones
+    if not done then
+        done = {}
+        vm.SandSwepShotBones = done
+    end
 
-    local times = wep._shotTimes or {}
-    local now = CurTime()
-    for _, cfg in ipairs(configs) do
+    local times = wep._shotTimes
+    local hasTimes = times and #times > 0
+    local now = hasTimes and CurTime() or 0
+    for i = 1, #configs do
+        local cfg = configs[i]
         local id = SandSwep.BoneId(vm, cfg.Bone)
         if id then
-            vm:ManipulateBoneAngles(id, cfg.Ang * ShotBoneWeight(cfg, times, now))
-            done[id] = true
+            local weight = hasTimes and ShotBoneWeight(cfg, times, now) or 0
+            SetScaledBoneAngles(vm, done, id, cfg.Ang, weight)
         end
     end
 end)

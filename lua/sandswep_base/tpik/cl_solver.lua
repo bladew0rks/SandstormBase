@@ -748,6 +748,8 @@ local TWIST_WEIGHT = 0.5
 local TWIST_LIMIT = 180
 local TWIST_RESET_FRAMES = 5
 local cvUlnaWeight = CreateClientConVar("cl_sandswep_tpik_ulna_twist", "0.5", true, false, "Share of the hand roll carried by the forearm twist bone", 0, 1)
+local ulnaWeight = cvUlnaWeight:GetFloat()
+cvars.AddChangeCallback("cl_sandswep_tpik_ulna_twist", function() ulnaWeight = cvUlnaWeight:GetFloat() end, "SandTPIK.Cache")
 
 local function rotateOnto(x, y, z, w, fx, fy, fz, tx, ty, tz)
     fx, fy, fz = Unit(fx, fy, fz)
@@ -835,7 +837,7 @@ local function twistToward(side, x, y, z, w, axisDir, targetUp)
     side.poleTwist, side.poleTwistFrame = twist, frame
     side.ulnaTwist = twist
 
-    local qx, qy, qz, qw = QuatAxisAngle(ax, ay, az, math.rad(twist * cvUlnaWeight:GetFloat()))
+    local qx, qy, qz, qw = QuatAxisAngle(ax, ay, az, math.rad(twist * ulnaWeight))
     return QuatMul(qx, qy, qz, qw, x, y, z, w)
 end
 
@@ -892,6 +894,7 @@ concommand.Add("sandswep_tpik_dump", function(_, _, args)
 end)
 
 local armUpper, armFore, armHand, armUlna = Matrix(), Matrix(), Matrix(), Matrix()
+local armElbow, armHandOut = Vector(), Vector()
 
 local function solveArmPole(ply, side, bones, outward, limbUpper, limbFore, scale, gunAng)
     local upperIdx = getBone(ply, bones.UpperArm)
@@ -919,7 +922,7 @@ local function solveArmPole(ply, side, bones, outward, limbUpper, limbFore, scal
     local bodyWeight = smooth(mathClamp((drop - HAND_DROP_START) / (HAND_DROP_END - HAND_DROP_START), 0, 1))
 
     local elbowPos, handPos = SANDTPIK.SolvePoleIK(rootPos, targetPos, poleDir,
-        bodyDir, bodyWeight, limbUpper * scale, limbFore * scale)
+        bodyDir, bodyWeight, limbUpper * scale, limbFore * scale, armElbow, armHandOut)
 
     local upperDir, foreDir = elbowPos - rootPos, handPos - elbowPos
 
@@ -1272,6 +1275,11 @@ function SANDTPIK.MeshLOD(ent)
 end
 
 local DEPTH_PASS = bit.bor(STUDIO_SHADOWDEPTHTEXTURE or 0, STUDIO_SSAODEPTHTEXTURE or 0)
+local flWep, flTpik, flState, flFlags
+local function drawFlashlightPass()
+    flTpik:DrawModel(flFlags)
+    if flState then SANDTPIK.DrawAttachments(flWep, flTpik, flState, flFlags) end
+end
 
 hook.Add("PostPlayerDraw", "SandTPIK", function(ply, flags)
     if not IsValid(ply) then return end
@@ -1289,10 +1297,9 @@ hook.Add("PostPlayerDraw", "SandTPIK", function(ply, flags)
     if state then SANDTPIK.DrawAttachments(wep, tpik, state, flags) end
 
     if render.RenderFlashlights and bit.band(flags or 0, DEPTH_PASS) == 0 then
-        render.RenderFlashlights(function()
-            tpik:DrawModel(flags)
-            if state then SANDTPIK.DrawAttachments(wep, tpik, state, flags) end
-        end)
+        flWep, flTpik, flState, flFlags = wep, tpik, state, flags
+        render.RenderFlashlights(drawFlashlightPass)
+        flWep, flTpik, flState = nil, nil, nil
     end
 end)
 

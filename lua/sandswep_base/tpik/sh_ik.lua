@@ -11,7 +11,7 @@ local function perpendicular(px, py, pz, dx, dy, dz)
     return normalize(px - dx * dot, py - dy * dot, pz - dz * dot)
 end
 
-function SANDTPIK.SolvePoleIK(rootPos, targetPos, poleDir, dropDir, dropWeight, upperLen, lowerLen)
+function SANDTPIK.SolvePoleIK(rootPos, targetPos, poleDir, dropDir, dropWeight, upperLen, lowerLen, outElbow, outHand)
     local rx, ry, rz = rootPos.x, rootPos.y, rootPos.z
     local dx, dy, dz, reach = normalize(targetPos.x - rx, targetPos.y - ry, targetPos.z - rz)
     if reach < 0.001 then dx, dy, dz, reach = 0, 0, -1, 0.001 end
@@ -26,8 +26,11 @@ function SANDTPIK.SolvePoleIK(rootPos, targetPos, poleDir, dropDir, dropWeight, 
     end
 
     if reach >= span then
-        return Vector(rx + dx * upperLen, ry + dy * upperLen, rz + dz * upperLen),
-            Vector(rx + dx * span, ry + dy * span, rz + dz * span)
+        local ex, ey, ez = rx + dx * upperLen, ry + dy * upperLen, rz + dz * upperLen
+        local hx, hy, hz = rx + dx * span, ry + dy * span, rz + dz * span
+        if outElbow then outElbow:SetUnpacked(ex, ey, ez) else outElbow = Vector(ex, ey, ez) end
+        if outHand then outHand:SetUnpacked(hx, hy, hz) else outHand = Vector(hx, hy, hz) end
+        return outElbow, outHand
     end
 
     local px, py, pz = normalize(poleDir.x, poleDir.y, poleDir.z)
@@ -45,8 +48,10 @@ function SANDTPIK.SolvePoleIK(rootPos, targetPos, poleDir, dropDir, dropWeight, 
     local along = upperLen * cosShoulder
     local out = upperLen * math.sqrt(1 - cosShoulder * cosShoulder)
 
-    local elbow = Vector(rx + dx * along + bx * out, ry + dy * along + by * out, rz + dz * along + bz * out)
-    local hand = Vector(rx + dx * reach, ry + dy * reach, rz + dz * reach)
+    local ex, ey, ez = rx + dx * along + bx * out, ry + dy * along + by * out, rz + dz * along + bz * out
+    local hx, hy, hz = rx + dx * reach, ry + dy * reach, rz + dz * reach
+    if outElbow then outElbow:SetUnpacked(ex, ey, ez) else outElbow = Vector(ex, ey, ez) end
+    if outHand then outHand:SetUnpacked(hx, hy, hz) else outHand = Vector(hx, hy, hz) end
 
-    return elbow, hand
+    return outElbow, outHand
 end

@@ -96,8 +96,9 @@ local function AddWaves(clip, phase, out, weight, channels)
     if not clip or weight == 0 then return end
 
     local angle = phase * TAU
-    for c, name in ipairs(channels or MOTION_CHANNELS) do
-        out[c] = out[c] + WaveValue(clip[name], angle) * weight
+    local list = channels or MOTION_CHANNELS
+    for c = 1, #list do
+        out[c] = out[c] + WaveValue(clip[list[c]], angle) * weight
     end
 end
 
@@ -112,8 +113,8 @@ local function SampleCurve(clip, time, out)
     local t = math.Clamp(time / clip.Length, 0, 1)
 
     out = out or {}
-    for c, name in ipairs(MOTION_CHANNELS) do
-        out[c] = CurveValue(clip[name], t)
+    for c = 1, 6 do
+        out[c] = CurveValue(clip[MOTION_CHANNELS[c]], t)
     end
 
     return out
@@ -449,6 +450,8 @@ local function BipodCameraPos(wep, pos)
     return pos
 end
 
+local undoCamAng, followDZAng = Angle(), Angle()
+
 local function UndoCameraAnim(wep, ang)
     local camW = wep._camAnimW
     if not camW or not wep.CameraAnimLockViewModel then return ang end
@@ -456,9 +459,9 @@ local function UndoCameraAnim(wep, ang)
     local deg = camW:Length()
     if deg <= 0.001 then return ang end
 
-    ang = Angle(ang.p, ang.y, ang.r)
-    ang:RotateAroundAxis(camW / deg, -deg)
-    return ang
+    undoCamAng:SetUnpacked(ang.p, ang.y, ang.r)
+    undoCamAng:RotateAroundAxis(camW / deg, -deg)
+    return undoCamAng
 end
 
 local function FollowDeadzone(wep, ang, inAng, aimT)
@@ -467,8 +470,8 @@ local function FollowDeadzone(wep, ang, inAng, aimT)
 
     local scale = wep.DeadzoneViewModelScale * (1 - aimT)
     local _, rel = WorldToLocal(vector_origin, camAng, vector_origin, inAng)
-    local followAng = Angle(ang.p + vmOffset.p * scale, ang.y + vmOffset.y * scale, ang.r)
-    local _, out = LocalToWorld(vector_origin, rel, vector_origin, followAng)
+    followDZAng:SetUnpacked(ang.p + vmOffset.p * scale, ang.y + vmOffset.y * scale, ang.r)
+    local _, out = LocalToWorld(vector_origin, rel, vector_origin, followDZAng)
 
     return out
 end
@@ -608,7 +611,9 @@ local function VMKick(wep, aimT)
             local amt = mult * (aiming and (shake.AimMult or 0.5) or 1)
             st.shakeAmp = math.min((st.shakeAmp or 0) + amt, amt * 2)
             st.shakeT = 0
-            st.shakePh = { math.Rand(0, 6.283), math.Rand(0, 6.283), math.Rand(0, 6.283) }
+            local ph = st.shakePh
+            if not ph then ph = {} st.shakePh = ph end
+            ph[1], ph[2], ph[3] = math.Rand(0, 6.283), math.Rand(0, 6.283), math.Rand(0, 6.283)
         end
 
         if acc then
@@ -806,7 +811,8 @@ function SWEP:ComputeViewModelPosition(pos, ang)
     if checkT > 0 then
         local sway = math.sin(CurTime() * MAGCHECK_SWAY_SPEED) * MAGCHECK_SWAY_DEG * checkT
         local checkAng = self.MagCheckAng
-        pos = ApplyPose(pos, newAng, axes, self.MagCheckPos, Angle(checkAng.p, checkAng.y, checkAng.r + sway), checkT)
+        followDZAng:SetUnpacked(checkAng.p, checkAng.y, checkAng.r + sway)
+        pos = ApplyPose(pos, newAng, axes, self.MagCheckPos, followDZAng, checkT)
     end
 
     if wallBack > 0 or wallTilt > 0 then
@@ -846,7 +852,8 @@ local function MoveDeadzone(wep, offset, deltaPitch, deltaYaw)
         return
     end
 
-    local reach = math.sqrt((offset.p / limPitch) ^ 2 + (offset.y / limYaw) ^ 2)
+    local rp, ry = offset.p / limPitch, offset.y / limYaw
+    local reach = math.sqrt(rp * rp + ry * ry)
     local share = math.Clamp(wep.DeadzoneLead or 0.6, 0, 1)
     local outward = (offset.p * deltaPitch) / (limPitch * limPitch)
         + (offset.y * deltaYaw) / (limYaw * limYaw) > 0
@@ -857,7 +864,8 @@ local function MoveDeadzone(wep, offset, deltaPitch, deltaYaw)
     offset.p = offset.p + deltaPitch * share
     offset.y = offset.y + deltaYaw * share
 
-    reach = math.sqrt((offset.p / limPitch) ^ 2 + (offset.y / limYaw) ^ 2)
+    rp, ry = offset.p / limPitch, offset.y / limYaw
+    reach = math.sqrt(rp * rp + ry * ry)
     if reach > 1 then offset.p, offset.y = offset.p / reach, offset.y / reach end
 end
 
@@ -1157,6 +1165,8 @@ hook.Add("HUDPaint", "SandSwep_CamDebug", function()
     end
 end)
 
+local camMotionAng = Angle()
+
 local function ApplyCameraMotion(wep, ang)
     wep:UpdateCameraAnim()
     local sprint = wep:GetSprintCamera()
@@ -1164,17 +1174,17 @@ local function ApplyCameraMotion(wep, ang)
     local jump = wep._jumpCam
     if not sprint and not camW and not jump then return ang end
 
-    ang = Angle(ang.p, ang.y, ang.r)
-    if jump then RotateLocal(ang, jump[1], jump[2], jump[3]) end
+    camMotionAng:SetUnpacked(ang.p, ang.y, ang.r)
+    if jump then RotateLocal(camMotionAng, jump[1], jump[2], jump[3]) end
 
     if camW then
         local deg = camW:Length()
-        ang:RotateAroundAxis(camW / deg, deg)
+        camMotionAng:RotateAroundAxis(camW / deg, deg)
     end
 
-    if sprint then RotateLocal(ang, sprint[1], sprint[2], sprint[3]) end
+    if sprint then RotateLocal(camMotionAng, sprint[1], sprint[2], sprint[3]) end
 
-    return ang
+    return camMotionAng
 end
 
 function SWEP:CalcView(ply, pos, ang, fov)

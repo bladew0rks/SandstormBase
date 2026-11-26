@@ -240,7 +240,7 @@ function SWEP:GetLensData(sight)
 
     local squash = ent.SandSwepSquash
     if squash and squash.s < 0.999 and squash.lensPos then
-        att = { Pos = squash.lensPos, Ang = squash.lensAng }
+        att.Pos, att.Ang = squash.lensPos, squash.lensAng
     end
 
     local fwd, up, right = OpticFrame(att)
@@ -590,6 +590,16 @@ local function PIPHidden(wep)
         and wep.GetPIPTarget and (wep._pipTargetLast or 0) <= 0
 end
 
+local pipView = {
+    x = 0,
+    y = 0,
+    aspect = 1,
+    zfar = 100000,
+    drawviewmodel = false,
+    drawhud = false,
+    dopostprocess = false,
+}
+
 local function RenderPIP(wep, sight, origin, dir, viewAng)
     SandSwep.RenderingPIP = true
 
@@ -602,20 +612,12 @@ local function RenderPIP(wep, sight, origin, dir, viewAng)
     UpdatePIPTarget()
     render.PushRenderTarget(pipRT)
     render.Clear(0, 0, 0, 255, true, true)
-    render.RenderView({
-        origin = origin,
-        angles = viewAng or dir:Angle(),
-        fov = wep._pipFov or 7,
-        x = 0,
-        y = 0,
-        w = pipSize,
-        h = pipSize,
-        aspect = 1,
-        zfar = 100000,
-        drawviewmodel = false,
-        drawhud = false,
-        dopostprocess = false,
-    })
+    pipView.origin = origin
+    pipView.angles = viewAng or dir:Angle()
+    pipView.fov = wep._pipFov or 7
+    pipView.w = pipSize
+    pipView.h = pipSize
+    render.RenderView(pipView)
     render.PopRenderTarget()
     SandSwep.RenderingPIP = false
 

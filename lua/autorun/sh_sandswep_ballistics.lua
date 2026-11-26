@@ -13,6 +13,28 @@ local cvPenMult = CreateConVar("sv_sandswep_penetration_mult", "1", FLAGS, "Mult
 local cvPenMax = CreateConVar("sv_sandswep_penetration_max", "3", FLAGS, "Most surfaces one bullet can go through", 0, 10)
 local cvRicochet = CreateConVar("sv_sandswep_ricochet", "1", FLAGS, "Multiplies how likely bullets are to ricochet off hard surfaces (0 = never)", 0, 3)
 local cvTracerTime = CreateConVar("sv_sandswep_bullet_tracer_time", "6", FLAGS, "Seconds a tracer burns before it goes out", 0.5, 15)
+local cvDebug = CreateConVar("sv_sandswep_ballistics_debug", "0", FLAGS, "Bullet debug drawing: 1 paths, 2 short labels, 3 full labels", 0, 3)
+local cvDebugTime = CreateConVar("sv_sandswep_ballistics_debug_time", "60", FLAGS, "Seconds the bullet debug drawing stays visible", 1, 600)
+
+local cfg = { enabled = true, pen = true, gravity = 1, penMult = 1, penMax = 3, ricochet = 1, tracerTime = 6, debug = 0 }
+local function ReadConVars()
+    cfg.enabled = cvEnabled:GetBool()
+    cfg.pen = cvPen:GetBool()
+    cfg.gravity = cvGravity:GetFloat()
+    cfg.penMult = cvPenMult:GetFloat()
+    cfg.penMax = cvPenMax:GetInt()
+    cfg.ricochet = cvRicochet:GetFloat()
+    cfg.tracerTime = cvTracerTime:GetFloat()
+    cfg.debug = cvDebug:GetInt()
+end
+ReadConVars()
+for _, cv in ipairs({ cvEnabled, cvPen, cvGravity, cvPenMult, cvPenMax, cvRicochet, cvTracerTime, cvDebug }) do
+    cvars.AddChangeCallback(cv:GetName(), ReadConVars, "SandSwep_BallisticsCache")
+end
+
+local floor, min, max, abs, sqrt, clamp = math.floor, math.min, math.max, math.abs, math.sqrt, math.Clamp
+local band, bor = bit.band, bit.bor
+local TraceLine = util.TraceLine
 
 local UNITS = 39.37
 local GRAVITY = 9.81 * UNITS
@@ -101,7 +123,7 @@ local function Sample(arr, count, t)
     local x = t / STEP
     if x <= 0 then return arr[1] end
 
-    local i = math.floor(x)
+    local i = floor(x)
     if i >= count - 1 then return arr[count] end
 
     local a = arr[i + 1]
@@ -122,7 +144,7 @@ local function Search(arr, count, value, descending)
 
     local lo, hi = 1, count
     while hi - lo > 1 do
-        local mid = math.floor((lo + hi) / 2)
+        local mid = floor((lo + hi) * 0.5)
         if (arr[mid] > value) == descending then lo = mid else hi = mid end
     end
 
@@ -134,7 +156,7 @@ function B.TimeAtDist(def, dist) return Search(def.Dist, def.Count, dist, false)
 
 function B.DropAt(def, tau, dist)
     local t = B.TimeAtDist(def, B.DistAt(def, tau) + dist) - tau
-    return 0.5 * GRAVITY * cvGravity:GetFloat() * t * t
+    return 0.5 * GRAVITY * cfg.gravity * t * t
 end
 
 B.AddCalibre("556x45",      { Velocity = 920, BC = 0.151, Pen = { wood = 25, sand = 8,  concrete = 3,   steel = 1.0,  flesh = 35 } })
@@ -166,7 +188,7 @@ B.AmmoCalibres = B.AmmoCalibres or {
     SniperPenetratedRound = "50bmg",
 }
 
-function B.Enabled() return cvEnabled:GetBool() end
+function B.Enabled() return cfg.enabled end
 
 local MATERIALS = {}
 local function Class(mat, class, fill) if mat then MATERIALS[mat] = { class, fill or 1 } end end
@@ -214,39 +236,35 @@ end
 
 local DOWN = Vector(0, 0, -1)
 
-local cvDebug = CreateConVar("sv_sandswep_ballistics_debug", "0", FLAGS, "Bullet debug drawing: 1 paths, 2 short labels, 3 full labels", 0, 3)
-local cvDebugTime = CreateConVar("sv_sandswep_ballistics_debug_time", "60", FLAGS, "Seconds the bullet debug drawing stays visible", 1, 600)
 local COL_INSTANT, COL_FLIGHT, COL_PEN, COL_HIT, COL_SKY = 1, 2, 3, 4, 5
 local DEBUG_COLORS = { Color(80, 255, 80), Color(255, 220, 60), Color(80, 160, 255), Color(255, 60, 60), Color(200, 80, 255) }
 local debugQueue = {}
 
-local function Debugging() return SERVER and cvDebug:GetInt() > 0 end
+local function Debugging() return SERVER and cfg.debug > 0 end
 local function DebugLine(a, b, col) debugQueue[#debugQueue + 1] = { 1, col, Vector(a), Vector(b) } end
 local function DebugCross(pos, col) debugQueue[#debugQueue + 1] = { 2, col, Vector(pos) } end
 local function DebugText(pos, text, col) debugQueue[#debugQueue + 1] = { 3, col, Vector(pos), text } end
 local function DebugPass(pos, full, short)
-    local level = cvDebug:GetInt()
-    if level == 2 then DebugText(pos, short, COL_PEN) elseif level == 3 then DebugText(pos, full, COL_PEN) end
+    if cfg.debug == 2 then DebugText(pos, short, COL_PEN) elseif cfg.debug == 3 then DebugText(pos, full, COL_PEN) end
 end
 local function DebugEnd(pos, full, col, short)
-    local level = cvDebug:GetInt()
     DebugCross(pos, col or COL_SKY)
-    if level == 2 then
+    if cfg.debug == 2 then
         DebugText(pos, short or full, col or COL_SKY)
-    elseif level >= 3 then
+    elseif cfg.debug >= 3 then
         DebugText(pos, full, col or COL_SKY)
         print(string.format("[sandswep ballistics] %s at %d %d %d", full, pos.x, pos.y, pos.z))
     end
 end
 
-local WATER = bit.bor(CONTENTS_WATER, CONTENTS_SLIME)
+local WATER = bor(CONTENTS_WATER, CONTENTS_SLIME)
 local UNDERWATER = 24
 local waterTrace, waterOut = { mask = WATER }, {}
 
 local function PosAt(state, e, out)
-    local o, d = state.Origin, state.Dir
-    local s = B.DistAt(state.Def, state.Tau + e) - state.Base
-    local drop = 0.5 * GRAVITY * cvGravity:GetFloat() * e * e
+    local o, d, def = state.Origin, state.Dir, state.Def
+    local s = Sample(def.Dist, def.Count, state.Tau + e) - state.Base
+    local drop = 0.5 * GRAVITY * cfg.gravity * e * e
     out.x = o.x + d.x * s
     out.y = o.y + d.y * s
     out.z = o.z + d.z * s - drop
@@ -255,15 +273,15 @@ end
 B.PosAt = PosAt
 
 local function Restart(state, pos, speed)
-    local d = state.Dir
-    local v = B.SpeedAt(state.Def, state.Tau + state.E)
-    local fall = GRAVITY * cvGravity:GetFloat() * state.E
+    local d, def = state.Dir, state.Def
+    local v = Sample(def.Speed, def.Count, state.Tau + state.E)
+    local fall = GRAVITY * cfg.gravity * state.E
     d.x, d.y, d.z = d.x * v, d.y * v, d.z * v - fall
     d:Normalize()
 
     state.Origin:Set(pos)
-    state.Tau = B.TimeAtSpeed(state.Def, speed)
-    state.Base = B.DistAt(state.Def, state.Tau)
+    state.Tau = B.TimeAtSpeed(def, speed)
+    state.Base = Sample(def.Dist, def.Count, state.Tau)
     state.E = 0
 end
 
@@ -350,24 +368,26 @@ local function Stopped(hit, head, mat, reason)
     return false
 end
 
+local DEFAULT_MAT = { "wood", 1 }
+
 local function Penetrate(state, hit)
     hit.why, hit.whyShort = nil, nil
     if hit.sky then return false end
 
     local def = state.Def
     local mat = MAT_NAMES[hit.mat] or "unknown material"
-    local info = MATERIALS[hit.mat] or MATERIALS[MAT_DEFAULT] or { "wood", 1 }
+    local info = MATERIALS[hit.mat] or MATERIALS[MAT_DEFAULT] or DEFAULT_MAT
     local class, fill = info[1], info[2]
-    local reach = (def.Pen[class] or 0) / fill * state.PenMult * cvPenMult:GetFloat() * hit.speed / state.Muzzle
+    local reach = (def.Pen[class] or 0) / fill * state.PenMult * cfg.penMult * hit.speed / state.Muzzle
     local head = Debugging() and string.format("%s at %.0f m/s | %s (%s%s), reaches %.1f cm", def.Name, hit.speed / UNITS, mat, class,
         fill ~= 1 and string.format(", %d%% solid", fill * 100) or "", reach) or ""
 
-    if not cvPen:GetBool() then return Stopped(hit, head, mat, "penetration off") end
-    if state.Pens >= cvPenMax:GetInt() then return Stopped(hit, head, mat, "surface limit reached") end
+    if not cfg.pen then return Stopped(hit, head, mat, "penetration off") end
+    if state.Pens >= cfg.penMax then return Stopped(hit, head, mat, "surface limit reached") end
     if hit.disp then return Stopped(hit, head, mat, "terrain stops bullets") end
     if class == "none" or reach <= 0 then return Stopped(hit, head, mat, "impenetrable") end
 
-    local depth = math.min(reach / CM_PER_UNIT, MAX_DEPTH)
+    local depth = min(reach / CM_PER_UNIT, MAX_DEPTH)
     if depth < 0.5 then return Stopped(hit, head, mat, "can't reach 0.5 units") end
 
     local dir = state.Dir
@@ -385,7 +405,7 @@ local function Penetrate(state, hit)
         return false
     end
 
-    local speed = hit.speed * math.sqrt(left)
+    local speed = hit.speed * sqrt(left)
     if speed < MIN_SPEED then return Stopped(hit, head, mat, "too slow after it") end
 
     if Debugging() then
@@ -408,7 +428,8 @@ local function Penetrate(state, hit)
     d.z = d.z + util.SharedRandom("SandSwepPenZ", -spread, spread, seed)
     d:Normalize()
 
-    state.Origin:Add(d * 0.25)
+    local o = state.Origin
+    o:SetUnpacked(o.x + d.x * 0.25, o.y + d.y * 0.25, o.z + d.z * 0.25)
 
     return true
 end
@@ -445,6 +466,8 @@ end
 
 local shot = { Num = 1, Spread = Vector(0, 0, 0) }
 local p0, p1 = Vector(), Vector()
+local segDir, segTo = Vector(), Vector()
+local muzzleOriginScratch, muzzleDirScratch = Vector(), Vector()
 
 local waterPos = Vector()
 
@@ -455,36 +478,38 @@ local function WaterSplash(pos, contents)
     fx:SetOrigin(pos)
     fx:SetNormal(vector_up)
     fx:SetScale(math.Rand(8, 12))
-    fx:SetFlags(bit.band(contents or 0, CONTENTS_SLIME) ~= 0 and 1 or 0)
+    fx:SetFlags(band(contents or 0, CONTENTS_SLIME) ~= 0 and 1 or 0)
     util.Effect("gunshotsplash", fx)
 end
 
 local function FireSegment(state, e, dur, from, to, tracer, col)
-    local dir = to - from
-    local len = dir:Length()
+    local dx, dy, dz = to.x - from.x, to.y - from.y, to.z - from.z
+    local len = sqrt(dx * dx + dy * dy + dz * dz)
     if len < 0.01 then
         hit.called, hit.hit, hit.sky = true, false, false
         return
     end
-    dir:Div(len)
+    local invLen = 1 / len
+    segDir:SetUnpacked(dx * invLen, dy * invLen, dz * invLen)
 
     local waterHit, waterDist, waterContents = false, 0, 0
     waterTrace.start, waterTrace.endpos, waterTrace.output = from, to, waterOut
-    local wtr = util.TraceLine(waterTrace)
+    local wtr = TraceLine(waterTrace)
     if wtr.Hit and not wtr.StartSolid then
         waterDist, waterContents = len * wtr.Fraction, wtr.Contents
         waterPos:Set(wtr.HitPos)
 
-        local cut = math.min(len, waterDist + UNDERWATER)
+        local cut = min(len, waterDist + UNDERWATER)
         dur = dur * cut / len
         len = cut
-        to = from + dir * len
+        segTo:SetUnpacked(from.x + segDir.x * len, from.y + segDir.y * len, from.z + segDir.z * len)
+        to = segTo
         waterHit = true
     end
 
     local b = state.Bullet
     shot.Src = from
-    shot.Dir = dir
+    shot.Dir = segDir
     shot.Distance = len
     shot.Damage = b.Damage
     shot.Force = b.Force
@@ -519,11 +544,35 @@ local function FireSegment(state, e, dur, from, to, tracer, col)
 end
 
 local live, pool = {}, {}
-local outgoing = {}
+local outgoing, outgoingPool = {}, {}
+
+local function QueueOutgoing(id, origin, dir, tau, owner, tracer, stopAt, unpredicted)
+    local n = #outgoingPool
+    local entry = outgoingPool[n]
+    if entry then
+        outgoingPool[n] = nil
+    else
+        entry = { origin = Vector(), dir = Vector() }
+    end
+
+    entry.id = id
+    entry.origin:Set(origin)
+    entry.dir:Set(dir)
+    entry.tau = tau
+    entry.owner = owner
+    entry.tracer = tracer
+    entry.stopAt = stopAt or -1
+    entry.unpredicted = unpredicted == true
+    outgoing[#outgoing + 1] = entry
+end
 
 local function NewState()
-    local s = table.remove(pool)
-    if s then return s end
+    local n = #pool
+    local s = pool[n]
+    if s then
+        pool[n] = nil
+        return s
+    end
     return { Origin = Vector(), Dir = Vector(), Bullet = {} }
 end
 
@@ -534,18 +583,38 @@ end
 
 local function Copy(src)
     local s = NewState()
-    for k, v in pairs(src) do
-        if k == "Origin" or k == "Dir" then s[k]:Set(v)
-        elseif k ~= "Bullet" then s[k] = v end
-    end
-    for k, v in pairs(src.Bullet) do s.Bullet[k] = v end
+    s.Def = src.Def
+    s.Owner = src.Owner
+    s.Weapon = src.Weapon
+    s.Callback = src.Callback
+    s.Origin:Set(src.Origin)
+    s.Dir:Set(src.Dir)
+    s.Muzzle = src.Muzzle
+    s.Tau = src.Tau
+    s.Base = src.Base
+    s.E = src.E
+    s.Age = src.Age
+    s.Pens = src.Pens
+    s.Ricochets = src.Ricochets
+    s.PenMult = src.PenMult
+    s.MinDamage = src.MinDamage
+    s.Seed = src.Seed
+    s.Tracer = src.Tracer
+    s.Ignore = src.Ignore
+
+    local sb, db = src.Bullet, s.Bullet
+    db.Damage = sb.Damage
+    db.Force = sb.Force
+    db.AmmoType = sb.AmmoType
+    db.TracerName = sb.TracerName
     return s
 end
 
 local function Alive(state)
+    local def = state.Def
     return state.Age < LIFETIME
-        and state.Tau + state.E < state.Def.Duration
-        and B.SpeedAt(state.Def, state.Tau + state.E) > MIN_SPEED
+        and state.Tau + state.E < def.Duration
+        and Sample(def.Speed, def.Count, state.Tau + state.E) > MIN_SPEED
 end
 
 local function Launch(state)
@@ -566,7 +635,7 @@ end
 
 local function SendTracer(state, origin, dir, tau, stopAt, unpredicted)
     if SERVER then
-        outgoing[#outgoing + 1] = { state.Def.Id, Vector(origin), Vector(dir), tau, 0, state.Owner, true, stopAt or -1, unpredicted }
+        QueueOutgoing(state.Def.Id, origin, dir, tau, state.Owner, true, stopAt, unpredicted)
     elseif IsFirstTimePredicted() then
         B.AddVisual(state.Def.Id, origin, dir, tau, 0, state.Owner, true, stopAt)
     end
@@ -582,8 +651,8 @@ local function Ricochet(state, hit, unpredicted)
     if IsValid(ent) and (ent:IsPlayer() or ent:IsNPC() or ent:IsNextBot()) then return false end
 
     local d, n = state.Dir, hit.normal
-    local v = B.SpeedAt(state.Def, state.Tau + state.E)
-    bounceDir:SetUnpacked(d.x * v, d.y * v, d.z * v - GRAVITY * cvGravity:GetFloat() * state.E)
+    local v = Sample(state.Def.Speed, state.Def.Count, state.Tau + state.E)
+    bounceDir:SetUnpacked(d.x * v, d.y * v, d.z * v - GRAVITY * cfg.gravity * state.E)
     bounceDir:Normalize()
 
     local graze = -bounceDir:Dot(n)
@@ -591,7 +660,7 @@ local function Ricochet(state, hit, unpredicted)
 
     local shallow = graze / RICOCHET_SIN
     local seed = state.Seed + state.Ricochets
-    if util.SharedRandom("SandSwepRicochet", 0, 1, seed) >= chance * (1 - shallow) * cvRicochet:GetFloat() then return false end
+    if util.SharedRandom("SandSwepRicochet", 0, 1, seed) >= chance * (1 - shallow) * cfg.ricochet then return false end
 
     local speed = hit.speed * Lerp(shallow, 0.8, 0.5)
     if speed < MIN_SPEED then return false end
@@ -606,18 +675,20 @@ local function Ricochet(state, hit, unpredicted)
 
     local out = d:Dot(n)
     if out < 0.02 then
-        d:Add(n * (0.02 - out))
+        local push = 0.02 - out
+        d:SetUnpacked(d.x + n.x * push, d.y + n.y * push, d.z + n.z * push)
         d:Normalize()
     end
 
-    state.Origin:Add(n * 0.5)
+    local o = state.Origin
+    o:SetUnpacked(o.x + n.x * 0.5, o.y + n.y * 0.5, o.z + n.z * 0.5)
     state.Ricochets = state.Ricochets + 1
     state.Ignore = IsValid(ent) and not hit.world and ent or nil
 
     if state.Tracer then
         SendTracer(state, state.Origin, d, state.Tau, nil, unpredicted)
     elseif SERVER then
-        outgoing[#outgoing + 1] = { state.Def.Id, Vector(state.Origin), Vector(d), state.Tau, 0, state.Owner, false, -1 }
+        QueueOutgoing(state.Def.Id, state.Origin, d, state.Tau, state.Owner, false, -1)
     end
 
     if SERVER then sound.Play("weapons/fx/rics/ric" .. math.random(1, 5) .. ".wav", hit.pos, 75, math.random(95, 110), 0.7) end
@@ -631,7 +702,7 @@ local function Ricochet(state, hit, unpredicted)
 end
 
 function B.SendCrack(owner, def, src, dir, speed)
-    outgoing[#outgoing + 1] = { def.Id, Vector(src), Vector(dir), B.TimeAtSpeed(def, speed), 0, owner, false, -1 }
+    QueueOutgoing(def.Id, src, dir, B.TimeAtSpeed(def, speed), owner, false, -1)
 end
 
 function B.Fire(owner, wep, src, dir, bullet, opts)
@@ -646,7 +717,7 @@ function B.Fire(owner, wep, src, dir, bullet, opts)
     state.Dir:Set(dir)
     state.Muzzle = opts.Speed
     state.Tau = B.TimeAtSpeed(def, opts.Speed)
-    state.Base = B.DistAt(def, state.Tau)
+    state.Base = Sample(def.Dist, def.Count, state.Tau)
     state.E = 0
     state.Age = 0
     state.Pens = 0
@@ -665,7 +736,9 @@ function B.Fire(owner, wep, src, dir, bullet, opts)
 
     local window = INSTANT
     local first = true
-    local muzzleOrigin, muzzleDir, muzzleTau = Vector(src), Vector(state.Dir), state.Tau
+    muzzleOriginScratch:Set(src)
+    muzzleDirScratch:Set(state.Dir)
+    local muzzleTau = state.Tau
     local stopAt
 
     while window > 0.001 do
@@ -700,9 +773,9 @@ function B.Fire(owner, wep, src, dir, bullet, opts)
     end
 
     if state.Tracer then
-        SendTracer(state, muzzleOrigin, muzzleDir, muzzleTau, stopAt)
+        SendTracer(state, muzzleOriginScratch, muzzleDirScratch, muzzleTau, stopAt)
     elseif SERVER then
-        outgoing[#outgoing + 1] = { def.Id, Vector(muzzleOrigin), Vector(muzzleDir), muzzleTau, 0, owner, false, stopAt or -1 }
+        QueueOutgoing(def.Id, muzzleOriginScratch, muzzleDirScratch, muzzleTau, owner, false, stopAt or -1)
     end
     if window == 0 then Launch(state) end
 
@@ -753,6 +826,10 @@ local function Clear(state, dt)
     end
     return not tr.Hit and not tr.StartSolid
 end
+
+local TAU_SCALE = 65535 / TABLE_TIME
+local STOP_SCALE = 16383 / LIFETIME
+local FLAG_TRACER, FLAG_UNPRED, FLAG_STOP = 1, 2, 4
 
 if SERVER then
     util.AddNetworkString("sandswep_bullets")
@@ -833,8 +910,9 @@ if SERVER then
             end
 
             if not keep then
-                live[i] = live[#live]
-                live[#live] = nil
+                live[i] = live[n]
+                live[n] = nil
+                n = n - 1
                 Release(s)
             end
         end
@@ -844,32 +922,41 @@ if SERVER then
         local n = #outgoing
         if n == 0 then return end
 
+        local sendCount = min(n, 255)
         net.Start("sandswep_bullets", true)
-        net.WriteUInt(math.min(n, 255), 8)
+        net.WriteUInt(sendCount, 8)
 
-        for i = 1, math.min(n, 255) do
+        for i = 1, sendCount do
             local o = outgoing[i]
-            net.WriteUInt(o[1], 8)
-            net.WriteVector(o[2])
-            net.WriteNormal(o[3])
-            net.WriteFloat(o[4])
-            net.WriteFloat(o[5])
-            net.WriteEntity(o[6])
-            net.WriteBool(o[7])
-            net.WriteFloat(o[8])
-            net.WriteBool(o[9] == true)
+            local hasStop = o.stopAt >= 0
+            local flags = bor(o.tracer and FLAG_TRACER or 0, o.unpredicted and FLAG_UNPRED or 0, hasStop and FLAG_STOP or 0)
+
+            net.WriteUInt(o.id, 8)
+            net.WriteVector(o.origin)
+            net.WriteNormal(o.dir)
+            net.WriteUInt(clamp(floor(o.tau * TAU_SCALE + 0.5), 0, 65535), 16)
+            net.WriteEntity(o.owner)
+            net.WriteUInt(flags, 3)
+            if hasStop then
+                net.WriteUInt(clamp(floor(o.stopAt * STOP_SCALE + 0.5), 0, 16383), 14)
+            end
         end
 
         net.Broadcast()
 
-        for i = n, 1, -1 do outgoing[i] = nil end
+        for i = n, 1, -1 do
+            local o = outgoing[i]
+            outgoing[i] = nil
+            o.owner = nil
+            outgoingPool[#outgoingPool + 1] = o
+        end
     end)
 
 
     return
 end
 
-local visuals = {}
+local visuals, visualPool = {}, {}
 local CRACK_RADIUS = 160
 local TRACER_LENGTH = 3 * UNITS
 local TRACER_WIDTH = 0.035 * UNITS
@@ -905,10 +992,10 @@ local function Palette(v)
 end
 
 local function Burn(v, life)
-    life = life or cvTracerTime:GetFloat()
-    local left = math.Clamp((life - v.Age) / (life * BURNOUT), 0, 1)
+    life = life or cfg.tracerTime
+    local left = clamp((life - v.Age) / (life * BURNOUT), 0, 1)
     local heat = SandSwep.Math.Smoothstep(left)
-    local sputter = 1 - 0.4 * (1 - left) * math.abs(math.sin(v.Age * 31 + v.Flicker) * math.sin(v.Age * 17))
+    local sputter = 1 - 0.4 * (1 - left) * abs(math.sin(v.Age * 31 + v.Flicker) * math.sin(v.Age * 17))
 
     local pal = Palette(v)
     local coreHot, coreCold, glowHot, glowCold = pal.CoreHot, pal.CoreCold, pal.GlowHot, pal.GlowCold
@@ -923,24 +1010,33 @@ function B.AddVisual(id, origin, dir, tau, e, owner, tracer, stopAt)
     local def = B.ById[id]
     if not def or #visuals >= MAX_FLYING then return end
 
-    local v = {
-        Def = def,
-        Origin = Vector(origin),
-        Dir = Vector(dir),
-        Tau = tau,
-        Base = B.DistAt(def, tau),
-        E = e,
-        StartE = e,
-        Age = e,
-        StopAt = stopAt and stopAt >= 0 and stopAt or nil,
-        Owner = owner,
-        Tracer = tracer,
-        Pos = Vector(),
-        Prev = Vector(),
-        TailE = e,
-        Fade = 1,
-        Flicker = math.random() * 10,
-    }
+    local pn = #visualPool
+    local v = visualPool[pn]
+    if v then
+        visualPool[pn] = nil
+        v.Origin:Set(origin)
+        v.Dir:Set(dir)
+    else
+        v = { Origin = Vector(origin), Dir = Vector(dir), Pos = Vector(), Prev = Vector() }
+    end
+
+    v.Def = def
+    v.Tau = tau
+    v.Base = Sample(def.Dist, def.Count, tau)
+    v.E = e
+    v.StartE = e
+    v.Age = e
+    v.StopAt = stopAt and stopAt >= 0 and stopAt or nil
+    v.Owner = owner
+    v.Tracer = tracer
+    v.TailE = e
+    v.Fade = 1
+    v.Flicker = math.random() * 10
+    v.Stopped = false
+    v.Sky = false
+    v.SkyAge = nil
+    v.Cracked = false
+
     PosAt(v, e, v.Pos)
     v.Prev:Set(v.Pos)
     visuals[#visuals + 1] = v
@@ -1020,24 +1116,24 @@ net.Receive("sandswep_bullets", function()
         local id = net.ReadUInt(8)
         local origin = net.ReadVector()
         local dir = net.ReadNormal()
-        local tau = net.ReadFloat()
-        local e = net.ReadFloat()
+        local tau = net.ReadUInt(16) / TAU_SCALE
         local owner = net.ReadEntity()
-        local tracer = net.ReadBool()
-        local stopAt = net.ReadFloat()
-        local unpredicted = net.ReadBool()
+        local flags = net.ReadUInt(3)
+        local tracer = band(flags, FLAG_TRACER) ~= 0
+        local unpredicted = band(flags, FLAG_UNPRED) ~= 0
+        local stopAt = band(flags, FLAG_STOP) ~= 0 and (net.ReadUInt(14) / STOP_SCALE) or -1
 
         if sp or owner ~= me or not tracer or unpredicted then
-            B.AddVisual(id, origin, dir, tau, e, owner, tracer, stopAt)
+            B.AddVisual(id, origin, dir, tau, 0, owner, tracer, stopAt)
         end
     end
 end)
 
-local wallTrace, wallOut = { mask = bit.bor(MASK_SOLID_BRUSHONLY, WATER) }, {}
+local wallTrace, wallOut = { mask = bor(MASK_SOLID_BRUSHONLY, WATER) }, {}
 
-local closest = Vector()
-local ROOF_CHECK = Vector(0, 0, 2048)
+local closest, roofEnd = Vector(), Vector()
 local roofOut = {}
+local CRACK_RADIUS_SQR = CRACK_RADIUS * CRACK_RADIUS
 
 local function NearMiss(v, eye)
     local a, b = v.Prev, v.Pos
@@ -1046,21 +1142,26 @@ local function NearMiss(v, eye)
     local len2 = abx * abx + aby * aby + abz * abz
     if len2 < 1 then return end
 
-    local t = math.Clamp(((eye.x - ax) * abx + (eye.y - ay) * aby + (eye.z - az) * abz) / len2, 0, 1)
-    closest:SetUnpacked(ax + abx * t, ay + aby * t, az + abz * t)
-    if closest:DistToSqr(eye) > CRACK_RADIUS * CRACK_RADIUS then return end
+    local ex, ey, ez = eye.x, eye.y, eye.z
+    local t = clamp(((ex - ax) * abx + (ey - ay) * aby + (ez - az) * abz) / len2, 0, 1)
+    local cx, cy, cz = ax + abx * t, ay + aby * t, az + abz * t
+    local dx, dy, dz = cx - ex, cy - ey, cz - ez
+    if dx * dx + dy * dy + dz * dz > CRACK_RADIUS_SQR then return end
 
     v.Cracked = true
-    if B.SpeedAt(v.Def, v.Tau + v.E) <= SOUND_SPEED * UNITS then return end
+    local def = v.Def
+    if Sample(def.Speed, def.Count, v.Tau + v.E) <= SOUND_SPEED * UNITS then return end
 
-    local roof = SandSwep.TraceLine(closest, closest + ROOF_CHECK, nil, MASK_SOLID_BRUSHONLY, roofOut)
+    closest:SetUnpacked(cx, cy, cz)
+    roofEnd:SetUnpacked(cx, cy, cz + 2048)
+    local roof = SandSwep.TraceLine(closest, roofEnd, nil, MASK_SOLID_BRUSHONLY, roofOut)
     local place = (roof.Hit and not roof.HitSky) and "indoor" or "outdoor"
 
     EmitSound("SandSwep.BulletBy." .. place, closest, 0, CHAN_STATIC, 1, 75, 0, math.random(96, 104))
 end
 
 local function TailTime(v, dt, speed)
-    return math.max(v.StartE, v.E - math.max(TRACER_LENGTH / math.max(speed, 1), dt * SHUTTER))
+    return max(v.StartE, v.E - max(TRACER_LENGTH / max(speed, 1), dt * SHUTTER))
 end
 
 hook.Add("Think", "SandSwep_BallisticsVisuals", function()
@@ -1074,7 +1175,7 @@ hook.Add("Think", "SandSwep_BallisticsVisuals", function()
     local view = IsValid(me) and me:GetViewEntity()
     local remote = IsValid(view) and view ~= me
     local eye = remote and view:GetPos() or (IsValid(me) and me:EyePos())
-    local burnTime = cvTracerTime:GetFloat()
+    local burnTime = cfg.tracerTime
 
     for i = n, 1, -1 do
         local v = visuals[i]
@@ -1082,7 +1183,7 @@ hook.Add("Think", "SandSwep_BallisticsVisuals", function()
 
         if v.Stopped then
             v.Fade = v.Fade - dt / STOP_FADE
-            v.TailE = math.min(v.E, v.TailE + dt * 0.5)
+            v.TailE = min(v.E, v.TailE + dt * 0.5)
             remove = v.Fade <= 0
         else
             v.Prev:Set(v.Pos)
@@ -1090,7 +1191,7 @@ hook.Add("Think", "SandSwep_BallisticsVisuals", function()
             local step = dt
             local stop = false
             if v.StopAt and v.Age + step >= v.StopAt then
-                step = math.max(0, v.StopAt - v.Age)
+                step = max(0, v.StopAt - v.Age)
                 stop = true
             end
             v.E = v.E + step
@@ -1107,7 +1208,7 @@ hook.Add("Think", "SandSwep_BallisticsVisuals", function()
                 wallTrace.start = v.Prev
                 wallTrace.endpos = v.Pos
                 wallTrace.output = wallOut
-                local tr = util.TraceLine(wallTrace)
+                local tr = TraceLine(wallTrace)
 
                 if tr.HitSky then
                     v.Sky, v.SkyAge = true, v.Age
@@ -1120,9 +1221,10 @@ hook.Add("Think", "SandSwep_BallisticsVisuals", function()
                 if eye and not v.Cracked and (remote or v.Owner ~= me) then NearMiss(v, eye) end
             end
 
-            local speed = B.SpeedAt(v.Def, v.Tau + v.E)
+            local def = v.Def
+            local speed = Sample(def.Speed, def.Count, v.Tau + v.E)
             v.TailE = TailTime(v, dt, speed)
-            if stop or v.Age >= LIFETIME or v.Tau + v.E >= v.Def.Duration or speed <= MIN_SPEED then
+            if stop or v.Age >= LIFETIME or v.Tau + v.E >= def.Duration or speed <= MIN_SPEED then
                 v.Stopped = true
                 if not v.Tracer then remove = true end
             end
@@ -1131,8 +1233,11 @@ hook.Add("Think", "SandSwep_BallisticsVisuals", function()
         if not v.Tracer and (v.Cracked or (v.Owner == me and not remote)) then remove = true end
 
         if remove then
-            visuals[i] = visuals[#visuals]
-            visuals[#visuals] = nil
+            visuals[i] = visuals[n]
+            visuals[n] = nil
+            n = n - 1
+            v.Owner, v.Def = nil, nil
+            visualPool[#visualPool + 1] = v
         end
     end
 end)
@@ -1160,7 +1265,7 @@ hook.Add("RenderScene", "SandSwep_BallisticsView", function(origin, angles)
     histCount = math.min(histCount + 1, HISTORY)
 end)
 
-local tailPos, nearHead, nearTail, toPoint = Vector(), Vector(), Vector(), Vector()
+local tailPos, nearHead, nearTail = Vector(), Vector(), Vector()
 local stripPts = {}
 local smearM, smearAge, smearCount, smearFrame = {}, {}, 0, -1
 local viewMat, histMat, smearTmp = Matrix(), Matrix(), Matrix()
@@ -1227,9 +1332,7 @@ local function SmearFrames(now)
 end
 
 local function InFront(pos, eye, fwd)
-    toPoint:Set(pos)
-    toPoint:Sub(eye)
-    return toPoint:Dot(fwd) > 0
+    return (pos.x - eye.x) * fwd.x + (pos.y - eye.y) * fwd.y + (pos.z - eye.z) * fwd.z > 0
 end
 
 local function TracerTail(v, out)

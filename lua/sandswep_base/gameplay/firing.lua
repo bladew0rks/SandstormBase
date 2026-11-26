@@ -340,6 +340,8 @@ if SERVER then
     util.AddNetworkString("sandswep_muzzle")
 
     local muzzleT = setmetatable({}, { __mode = "k" })
+    local muzzlePosScratch = Vector()
+    local MUZZLE_POS_INV = BARREL_MAX_DIST / 2047
 
     net.Receive("sandswep_muzzle", function(_, ply)
         if not IsValid(ply) then return end
@@ -348,11 +350,15 @@ if SERVER then
         if now - (muzzleT[ply] or 0) < 1 / 100 then return end
         muzzleT[ply] = now
 
-        local pos, dir, tilt = net.ReadVector(), net.ReadNormal(), net.ReadUInt(7)
+        muzzlePosScratch:SetUnpacked(
+            net.ReadInt(12) * MUZZLE_POS_INV,
+            net.ReadInt(12) * MUZZLE_POS_INV,
+            net.ReadInt(12) * MUZZLE_POS_INV)
+        local dir, tilt = net.ReadNormal(), net.ReadUInt(7)
 
         local wep = ply:GetActiveWeapon()
         if IsValid(wep) and wep.IsSandSwep and wep.SetBarrelData then
-            wep:SetBarrelData(pos, dir, tilt)
+            wep:SetBarrelData(muzzlePosScratch, dir, tilt)
         end
     end)
 end

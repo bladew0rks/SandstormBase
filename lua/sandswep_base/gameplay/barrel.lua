@@ -3,8 +3,12 @@
 if CLIENT then
     local SEND_ACTIVE = 1 / 66
     local SEND_IDLE = 1 / 5
+    local SEND_KEEPALIVE = 0.3
+    local POS_SCALE = 2047 / 60
 
-    local barrelFrame, barrelUpdateNext, barrelNext, wasActive = nil, 0, 0, false
+    local barrelFrame, barrelUpdateNext, barrelNext, lastSentAt, wasActive = nil, 0, 0, 0, false
+    local lastQX, lastQY, lastQZ, lastTilt = 0, 0, 0, -1
+    local lastDirX, lastDirY, lastDirZ = 0, 0, 0
     local muzzleScratch, barrelScratch = Vector(), Vector()
     local localPosScratch, localDirScratch = Vector(), Vector()
     local aimAngScratch = Angle()
@@ -109,11 +113,27 @@ if CLIENT then
 
         if now >= barrelNext or (active and not wasActive) then
             barrelNext = now + (active and SEND_ACTIVE or SEND_IDLE)
-            net.Start("sandswep_muzzle", true)
-                net.WriteVector(localPosScratch)
-                net.WriteNormal(localDirScratch)
-                net.WriteUInt(tiltDeg, 7)
-            net.SendToServer()
+
+            local qx = math.Clamp(math.Round(localPosScratch.x * POS_SCALE), -2047, 2047)
+            local qy = math.Clamp(math.Round(localPosScratch.y * POS_SCALE), -2047, 2047)
+            local qz = math.Clamp(math.Round(localPosScratch.z * POS_SCALE), -2047, 2047)
+            local dx, dy, dz = localDirScratch.x, localDirScratch.y, localDirScratch.z
+            local changed = qx ~= lastQX or qy ~= lastQY or qz ~= lastQZ or tiltDeg ~= lastTilt
+                or (dx * lastDirX + dy * lastDirY + dz * lastDirZ) < 0.99999
+
+            if changed or now - lastSentAt >= SEND_KEEPALIVE then
+                lastQX, lastQY, lastQZ, lastTilt = qx, qy, qz, tiltDeg
+                lastDirX, lastDirY, lastDirZ = dx, dy, dz
+                lastSentAt = now
+
+                net.Start("sandswep_muzzle", true)
+                    net.WriteInt(qx, 12)
+                    net.WriteInt(qy, 12)
+                    net.WriteInt(qz, 12)
+                    net.WriteNormal(localDirScratch)
+                    net.WriteUInt(tiltDeg, 7)
+                net.SendToServer()
+            end
         end
         wasActive = active
     end

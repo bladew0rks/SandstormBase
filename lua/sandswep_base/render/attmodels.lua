@@ -76,7 +76,7 @@ function SWEP:RemoveVMAttachmentModels()
     for _, ent in pairs(self._vmAttEnts or {}) do
         if IsValid(ent) then ent:Remove() end
     end
-    self._vmAttEnts, self._vmAttKey = nil, nil
+    self._vmAttEnts, self._vmAttList, self._vmAttKey = nil, nil, nil
 end
 
 local function ModelsCurrent(wep, key, vm)
@@ -84,9 +84,9 @@ local function ModelsCurrent(wep, key, vm)
         and key.model == vm:GetModel() and key.edit == wep._attEditVer
 end
 
-local function AllValid(ents)
-    for _, ent in pairs(ents) do
-        if not IsValid(ent) then return false end
+local function AllValid(list)
+    for i = 1, #list do
+        if not IsValid(list[i]) then return false end
     end
     return true
 end
@@ -97,10 +97,12 @@ local function SetupLighting(ent)
 end
 
 function SWEP:UpdateVMAttachmentModels(vm)
-    if self._vmAttEnts and ModelsCurrent(self, self._vmAttKey, vm) and AllValid(self._vmAttEnts) then return end
+    if self._vmAttList and ModelsCurrent(self, self._vmAttKey, vm) and AllValid(self._vmAttList) then return end
 
     self:RemoveVMAttachmentModels()
     self._vmAttEnts = {}
+    local list = {}
+    self._vmAttList = list
     local slots = self:GetAttachmentSlots()
 
     for slotName, id in self:IterAttachments() do
@@ -123,6 +125,7 @@ function SWEP:UpdateVMAttachmentModels(vm)
         end
 
         self._vmAttEnts[slotName .. "#mount"] = ent
+        list[#list + 1] = ent
     end
 
     for slotName, id, def in self:IterAttachments() do
@@ -144,6 +147,7 @@ function SWEP:UpdateVMAttachmentModels(vm)
         end
 
         self._vmAttEnts[slotName] = ent
+        list[#list + 1] = ent
     end
 
     self._vmAttKey = {
@@ -191,9 +195,13 @@ local function PoseFlip(wep, ent, def)
 end
 
 function SWEP:DrawVMAttachments(vm, active, aimT)
+    local list = self._vmAttList
+    if not list then return end
+
     local squashT = aimT * (1 - self:GetPointAimProgress())
 
-    for _, ent in pairs(self._vmAttEnts or {}) do
+    for i = 1, #list do
+        local ent = list[i]
         if not IsValid(ent) then continue end
 
         if active and active.Squash and active.AttSlot == ent.SandSwepSlot then

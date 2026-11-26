@@ -247,10 +247,15 @@ local function StepDropped(belt, ply)
     return moving
 end
 
-local function DrawLinks(belt, ent, toPos, scale)
-    local scaleMatrix = Matrix()
-    scaleMatrix:Scale(Vector(scale, scale, scale))
-    ent:EnableMatrix("RenderMultiply", scaleMatrix)
+local linkScaleMat, linkScaleVec, linkPosScratch = Matrix(), Vector(1, 1, 1), Vector()
+
+local function DrawLinks(belt, ent, toVM, info, scale)
+    if scale ~= 1 then
+        linkScaleVec:SetUnpacked(scale, scale, scale)
+        linkScaleMat:Identity()
+        linkScaleMat:Scale(linkScaleVec)
+        ent:EnableMatrix("RenderMultiply", linkScaleMat)
+    end
 
     local nodes = belt.nodes
     local count = #nodes
@@ -266,13 +271,13 @@ local function DrawLinks(belt, ent, toPos, scale)
         local linkUp = linkFwd:Cross(tangent)
         linkUp:Normalize()
 
-        ent:SetPos(toPos(nodes[i].p))
+        ent:SetPos(toVM and view.ToVM(nodes[i].p, info, linkPosScratch) or nodes[i].p)
         ent:SetAngles(linkFwd:AngleEx(linkUp))
         ent:SetupBones()
         ent:DrawModel()
     end
 
-    ent:DisableMatrix("RenderMultiply")
+    if scale ~= 1 then ent:DisableMatrix("RenderMultiply") end
 end
 
 hook.Add("Think", "SandSwep_DroppedBelts", function()
@@ -311,9 +316,8 @@ hook.Add("Think", "SandSwep_DroppedBelts", function()
     end
 end)
 
-local function Identity(pos)
-    return pos
-end
+local fadeCol = Color(255, 255, 255, 255)
+local WHITE_COL = Color(255, 255, 255, 255)
 
 hook.Add("PostDrawOpaqueRenderables", "SandSwep_DroppedBelts", function(depth, sky)
     if depth or sky or #dropped == 0 then return end
@@ -321,7 +325,8 @@ hook.Add("PostDrawOpaqueRenderables", "SandSwep_DroppedBelts", function(depth, s
     local ct = CurTime()
     local life = cvShellLife:GetFloat()
 
-    for _, belt in ipairs(dropped) do
+    for i = 1, #dropped do
+        local belt = dropped[i]
         if belt.vmStage and ct - belt.born <= EJECT_VM_TIME + 0.1 then continue end
 
         belt.vmStage = false
@@ -332,13 +337,14 @@ hook.Add("PostDrawOpaqueRenderables", "SandSwep_DroppedBelts", function(depth, s
         local fading = ct - belt.born > life
         if fading then
             ent:SetRenderMode(RENDERMODE_TRANSCOLOR)
-            ent:SetColor(Color(255, 255, 255, (1 - math.Clamp((ct - belt.born - life) / FADE_TIME, 0, 1)) * 255))
+            fadeCol.a = (1 - math.Clamp((ct - belt.born - life) / FADE_TIME, 0, 1)) * 255
+            ent:SetColor(fadeCol)
         end
 
-        DrawLinks(belt, ent, Identity, 1)
+        DrawLinks(belt, ent, false, nil, 1)
 
         if fading then
-            ent:SetColor(Color(255, 255, 255, 255))
+            ent:SetColor(WHITE_COL)
             ent:SetRenderMode(RENDERMODE_NORMAL)
         end
     end
@@ -347,7 +353,8 @@ end)
 local function DrawYoungBelts(info)
     local ct = CurTime()
 
-    for _, belt in ipairs(dropped) do
+    for i = 1, #dropped do
+        local belt = dropped[i]
         if not belt.vmStage then continue end
 
         local age = ct - belt.born
@@ -359,7 +366,7 @@ local function DrawYoungBelts(info)
         local ent = LinkModel(belt.mdl)
         if IsValid(ent) then
             local scale = Lerp(math.Clamp(age / EJECT_VM_TIME, 0, 1), 1, 1 / info.k)
-            DrawLinks(belt, ent, function(pos) return view.ToVM(pos, info) end, scale)
+            DrawLinks(belt, ent, true, info, scale)
         end
     end
 end

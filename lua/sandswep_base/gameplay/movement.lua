@@ -125,17 +125,22 @@ function SWEP:GetBipodFovScale(fov)
     return math.tan(math.rad(math.Clamp(fov, 1, 170) * 0.5)) / math.tan(math.rad(math.Clamp(vmFov, 1, 170) * 0.5))
 end
 
-local function PoseFeet(feet, offset, ang)
-    local rot = Angle(0, 0, 0)
-    local RIGHT, FWD, UP = Vector(0, -1, 0), Vector(1, 0, 0), Vector(0, 0, 1)
-    rot:RotateAroundAxis(RIGHT, ang.p)
-    rot:RotateAroundAxis(UP, ang.y)
-    rot:RotateAroundAxis(FWD, ang.r)
+local BIPOD_RIGHT, BIPOD_FWD, BIPOD_UP = Vector(0, -1, 0), Vector(1, 0, 0), Vector(0, 0, 1)
+local bipodRot, bipodVec = Angle(), Vector()
+local DEFAULT_CAM_WINDOW = { 0, 0.3 }
 
-    local rotated = Vector(feet.y, -feet.x, feet.z)
-    rotated:Rotate(rot)
+local function PoseFeet(feet, offset, ang, out)
+    bipodRot:Zero()
+    bipodRot:RotateAroundAxis(BIPOD_RIGHT, ang.p)
+    bipodRot:RotateAroundAxis(BIPOD_UP, ang.y)
+    bipodRot:RotateAroundAxis(BIPOD_FWD, ang.r)
 
-    return Vector(-rotated.y + offset.x, rotated.x + offset.y, rotated.z + offset.z)
+    bipodVec:SetUnpacked(feet.y, -feet.x, feet.z)
+    bipodVec:Rotate(bipodRot)
+
+    out = out or Vector()
+    out:SetUnpacked(-bipodVec.y + offset.x, bipodVec.x + offset.y, bipodVec.z + offset.z)
+    return out
 end
 
 local cvBipodCentred
@@ -181,13 +186,13 @@ function SWEP:GetBipodWeight()
     local change = self:GetBipodChange()
 
     if self:GetBipodDeployed() then
-        local window = cfg.CamIn or { 0, 0.3 }
+        local window = cfg.CamIn or DEFAULT_CAM_WINDOW
         return BipodSmooth((SinceTime(change) - window[1]) / math.max(window[2] - window[1], 0.01))
     end
 
     if change <= 0 then return 0 end
 
-    local window = cfg.CamOut or { 0, 0.3 }
+    local window = cfg.CamOut or DEFAULT_CAM_WINDOW
     return 1 - BipodSmooth((SinceTime(change) - window[1]) / math.max(window[2] - window[1], 0.01))
 end
 
@@ -325,6 +330,8 @@ function SWEP:ToggleBipod()
     end
 end
 
+local bipodClampAng = Angle()
+
 function SWEP:ClampBipodAngles(ang)
     local cfg = self.Bipod
     local baseYaw, basePitch = self:GetBipodYaw(), self:GetBipodPitch()
@@ -334,7 +341,8 @@ function SWEP:ClampBipodAngles(ang)
     local pitch = math.Clamp(ang.p, math.max(basePitch - (cfg.PitchUp or 30), -89), math.min(basePitch + (cfg.PitchDown or 30), 89))
     if math.abs(yawDiff) <= limit and pitch == ang.p then return end
 
-    return Angle(pitch, baseYaw + math.Clamp(yawDiff, -limit, limit), ang.r)
+    bipodClampAng:SetUnpacked(pitch, baseYaw + math.Clamp(yawDiff, -limit, limit), ang.r)
+    return bipodClampAng
 end
 
 local function DeployedBipodWeapon(ply)

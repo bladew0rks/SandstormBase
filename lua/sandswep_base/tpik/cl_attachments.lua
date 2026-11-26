@@ -5,8 +5,7 @@ local placeMat = Matrix()
 local function boneId(ent, name)
     if not isstring(name) or name == "" then return end
 
-    local id = ent:LookupBone(name)
-    if id and id >= 0 then return id end
+    return SandSwep.BoneId(ent, name)
 end
 
 function SANDTPIK.ClearAttachments(state)
@@ -16,12 +15,12 @@ function SANDTPIK.ClearAttachments(state)
         if IsValid(ent) then ent:Remove() end
     end
 
-    state.attEnts, state.attData, state.attSkins, state.attModel = nil, nil, nil, nil
+    state.attEnts, state.attList, state.attData, state.attSkins, state.attModel = nil, nil, nil, nil, nil
 end
 
-local function allValid(ents)
-    for _, ent in pairs(ents) do
-        if not IsValid(ent) then return false end
+local function allValid(list)
+    for i = 1, #list do
+        if not IsValid(list[i]) then return false end
     end
 
     return true
@@ -72,7 +71,9 @@ local function build(wep, tpik, state)
         end
     end
 
-    state.attEnts = ents
+    local list = {}
+    for _, ent in pairs(ents) do list[#list + 1] = ent end
+    state.attEnts, state.attList = ents, list
 end
 
 function SANDTPIK.SyncAttachments(wep, tpik, state)
@@ -80,16 +81,16 @@ function SANDTPIK.SyncAttachments(wep, tpik, state)
 
     local data, skins, model = wep:GetAttData(), wep:GetAttSkins(), tpik.SandTPIK_Path
 
-    local unchanged = state.attEnts
+    local unchanged = state.attList
         and state.attData == data and state.attSkins == skins and state.attModel == model
-        and allValid(state.attEnts)
+        and allValid(state.attList)
 
     if unchanged then return end
 
     local ok, slots = pcall(wep.GetAttachmentSlots, wep)
     if not ok or not istable(slots) or not next(slots) then
         SANDTPIK.ClearAttachments(state)
-        state.attEnts, state.attData, state.attSkins, state.attModel = {}, data, skins, model
+        state.attEnts, state.attList, state.attData, state.attSkins, state.attModel = {}, {}, data, skins, model
         return
     end
 
@@ -122,13 +123,15 @@ local function poseFlip(wep, ent, def)
 end
 
 function SANDTPIK.DrawAttachments(wep, tpik, state, flags)
-    if not state.attEnts or not next(state.attEnts) then return end
+    local list = state.attList
+    if not list or #list == 0 then return end
 
     local frame = FrameNumber()
     local fresh = state.attFrame ~= frame
     state.attFrame = frame
 
-    for _, ent in pairs(state.attEnts) do
+    for i = 1, #list do
+        local ent = list[i]
         if not IsValid(ent) then continue end
 
         poseFlip(wep, ent, ent.SandTPIK_Def)

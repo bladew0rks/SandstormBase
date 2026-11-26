@@ -39,11 +39,24 @@ function SANDTPIK.IsLooping(ent, seq)
     return info ~= nil and bit.band(info.flags or 0, 1) ~= 0
 end
 
+local seqDurations = {}
+
 function SANDTPIK.CycleAt(ent, seq, start, cycle, rate, now, looping)
     if not seq or seq < 0 then return 0 end
 
-    local duration = ent:SequenceDuration(seq)
-    if not duration or duration <= 0 then return cycle or 0 end
+    local mdl = ent:GetModel() or ""
+    local bySeq = seqDurations[mdl]
+    if not bySeq then
+        bySeq = {}
+        seqDurations[mdl] = bySeq
+    end
+
+    local duration = bySeq[seq]
+    if duration == nil then
+        duration = ent:SequenceDuration(seq) or 0
+        bySeq[seq] = duration
+    end
+    if duration <= 0 then return cycle or 0 end
 
     local progress = (cycle or 0) + (now - (start or now)) * (rate or 1) / duration
 
